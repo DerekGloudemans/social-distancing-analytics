@@ -9,14 +9,39 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
-flags.DEFINE_string('framework', 'tf', '(tf, tflite')
-flags.DEFINE_string('weights', './data/yolov4.weights',
-                    'path to weights file')
-flags.DEFINE_integer('size', 608, 'resize images to')
-flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
-flags.DEFINE_string('model', 'yolov4', 'yolov3 or yolov4')
-flags.DEFINE_string('image', './data/kite.jpg', 'path to input image')
-flags.DEFINE_string('output', 'result.png', 'path to output image')
+#shows where processes are occuring, CPU or GPU
+#tf.debugging.set_log_device_placement(True)
+####Delete all flags before declare#####
+
+# def del_all_flags(FLAGS):
+    # flags_dict = FLAGS._flags()    
+    # keys_list = [keys for keys in flags_dict]    
+    # for keys in keys_list:
+    #     FLAGS.__delattr__(keys)
+        
+
+# del_all_flags(flags.FLAGS)
+
+# delattr(flags.FLAGS, 'framework')
+# delattr(flags.FLAGS, 'weights')
+# delattr(flags.FLAGS, 'size')
+# delattr(flags.FLAGS, 'tiny')
+# delattr(flags.FLAGS, 'model')
+# delattr(flags.FLAGS, 'image')
+# delattr(flags.FLAGS, 'output')
+
+try:
+    flags.DEFINE_string('framework', 'tf', '(tf, tflite')
+    flags.DEFINE_string('weights', './data/yolov4.weights',
+                        'path to weights file')
+    flags.DEFINE_integer('size', 608, 'resize images to')
+    flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
+    flags.DEFINE_string('model', 'yolov4', 'yolov3 or yolov4')
+    flags.DEFINE_string('image', './data/kite.jpg', 'path to input image')
+    flags.DEFINE_string('output', 'result.png', 'path to output image')
+    
+except:
+    print('Flags already exist')
 
 def main(_argv):
     if FLAGS.tiny:
@@ -98,6 +123,10 @@ def main(_argv):
     image.show()
     # image = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
     # cv2.imwrite(FLAGS.output, image)
+    
+
+    
+
 
 if __name__ == '__main__':
     try:

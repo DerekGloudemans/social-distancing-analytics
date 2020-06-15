@@ -12,10 +12,10 @@ import tensorflow as tf
 flags.DEFINE_string('framework', 'tf', '(tf, tflite')
 flags.DEFINE_string('weights', './data/yolov4.weights',
                     'path to weights file')
-flags.DEFINE_integer('size', 608, 'resize images to')
+flags.DEFINE_integer('size', 100, 'resize images to')
 flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
 flags.DEFINE_string('model', 'yolov4', 'yolov3 or yolov4')
-flags.DEFINE_string('video', './data/road.avi', 'path to input video')
+flags.DEFINE_string('video', './data/road.mp4', 'path to input video') #'./data/ACC Export - 2020-03-02 11.46.34 AM.avi'
 
 def main(_argv):
     if FLAGS.tiny:
@@ -84,7 +84,11 @@ def main(_argv):
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image = Image.fromarray(frame)
         else:
+            cv2.destroyWindow("result")
             raise ValueError("No image! Try with another video format")
+            while cv2.getWindowProperty('window-name', 0) >= 0:
+                keyCode = cv2.waitKey(50)
+            #break
         frame_size = frame.shape[:2]
         image_data = utils.image_preprocess(np.copy(frame), [input_size, input_size])
         image_data = image_data[np.newaxis, ...].astype(np.float32)

@@ -370,3 +370,84 @@ def unfreeze_all(model, frozen=False):
         for l in model.layers:
             unfreeze_all(l, frozen)
 
+def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
+    output_f = path[:-3] + 'txt'
+    f = open(output_f, 'w')
+    
+    ped = 0
+    vehicle = 0
+    bike = 0
+    for i, bbox in enumerate(bboxes):
+        class_ind = int(bbox[5])
+        if classes[class_ind] == 'person':
+            ped = ped + 1    
+        elif classes[class_ind] == 'bicycle':
+            bike = bike + 1
+        elif classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
+            vehicle = vehicle + 1
+    
+    # write image name + timestamp f.write()
+    f.write('Pedestrians: ' + str(ped))
+    f.write('   Vehicles: ' + str(vehicle))
+    f.write('   Bike: ' + str(bike))
+    f.close()
+    
+#FIXME can get rid of above code by simple rewrite in detect.py
+def video_write_info(image, f, bboxes, dt, classes=read_class_names(cfg.YOLO.CLASSES)):
+
+    ped = 0
+    vehicle = 0
+    bike = 0
+    for i, bbox in enumerate(bboxes):
+        class_ind = int(bbox[5])
+        if classes[class_ind] == 'person':
+            ped = ped + 1    
+        elif classes[class_ind] == 'bicycle':
+            bike = bike + 1
+        elif classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
+            vehicle = vehicle + 1
+            
+        
+    
+    # write image name + timestamp f.write()
+    f.write(dt)
+    f.write('\tPedestrians: ' + str(ped))
+    f.write('\tVehicles: ' + str(vehicle))
+    f.write('\tBikes: ' + str(bike))
+    f.write('\n')
+    
+def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=True):
+    """
+    bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
+    """
+
+    num_classes = len(classes)
+    image_h, image_w, _ = image.shape
+    hsv_tuples = [(1.0 * x / num_classes, 1., 1.) for x in range(num_classes)]
+    colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
+    colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
+
+    random.seed(0)
+    random.shuffle(colors)
+    random.seed(None)
+
+    for i, bbox in enumerate(bboxes):
+        class_ind = int(bbox[5])
+        if classes[class_ind] == 'person' or classes[class_ind] == 'bicycle' or classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
+            coor = np.array(bbox[:4], dtype=np.int32)
+            fontScale = 0.5
+            score = bbox[4]
+            bbox_color = colors[class_ind]
+            bbox_thick = int(0.6 * (image_h + image_w) / 600)
+            c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
+            cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
+        
+            if show_label:
+                bbox_mess = '%s: %.2f' % (classes[class_ind], score)
+                t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick//2)[0]
+                cv2.rectangle(image, c1, (c1[0] + t_size[0], c1[1] - t_size[1] - 3), bbox_color, -1)  # filled
+        
+                cv2.putText(image, bbox_mess, (c1[0], c1[1]-2), cv2.FONT_HERSHEY_SIMPLEX,
+                            fontScale, (0, 0, 0), bbox_thick//2, lineType=cv2.LINE_AA)
+
+    return image

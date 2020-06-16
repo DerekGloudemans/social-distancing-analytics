@@ -1,13 +1,64 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon Jun 15 12:30:18 2020
-
+based on utils.py from https://github.com/hunglc007/tensorflow-yolov4-tflite
 @author: Nikki
 """
 import numpy as np
 import tensorflow as tf
+import colorsys
+import random
+import cv2
 from core.config import cfg
 
+def get_anchors(anchors_path, tiny=False):
+    '''loads the anchors from a file'''
+    with open(anchors_path) as f:
+        anchors = f.readline()
+    anchors = np.array(anchors.split(','), dtype=np.float32)
+    if tiny:
+        return anchors.reshape(2, 3, 2)
+    else:
+        return anchors.reshape(3, 3, 2)
+
+def load_weights(model, weights_file):
+    wf = open(weights_file, 'rb')
+    major, minor, revision, seen, _ = np.fromfile(wf, dtype=np.int32, count=5)
+
+    j = 0
+    for i in range(110):
+        conv_layer_name = 'conv2d_%d' %i if i > 0 else 'conv2d'
+        bn_layer_name = 'batch_normalization_%d' %j if j > 0 else 'batch_normalization'
+
+        conv_layer = model.get_layer(conv_layer_name)
+        filters = conv_layer.filters
+        k_size = conv_layer.kernel_size[0]
+        in_dim = conv_layer.input_shape[-1]
+
+        if i not in [93, 101, 109]:
+            # darknet weights: [beta, gamma, mean, variance]
+            bn_weights = np.fromfile(wf, dtype=np.float32, count=4 * filters)
+            # tf weights: [gamma, beta, mean, variance]
+            bn_weights = bn_weights.reshape((4, filters))[[1, 0, 2, 3]]
+            bn_layer = model.get_layer(bn_layer_name)
+            j += 1
+        else:
+            conv_bias = np.fromfile(wf, dtype=np.float32, count=filters)
+
+        # darknet shape (out_dim, in_dim, height, width)
+        conv_shape = (filters, in_dim, k_size, k_size)
+        conv_weights = np.fromfile(wf, dtype=np.float32, count=np.product(conv_shape))
+        # tf shape (height, width, in_dim, out_dim)
+        conv_weights = conv_weights.reshape(conv_shape).transpose([2, 3, 1, 0])
+
+        if i not in [93, 101, 109]:
+            conv_layer.set_weights([conv_weights])
+            bn_layer.set_weights(bn_weights)
+        else:
+            conv_layer.set_weights([conv_weights, conv_bias])
+
+    assert len(wf.read()) == 0, 'failed to read all data'
+    wf.close()
 
 def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
     for i, pred in enumerate(pred_bbox):
@@ -137,6 +188,8 @@ def bboxes_iou(boxes1, boxes2):
 
     return ious
 
+
+
 def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
     output_f = path[:-3] + 'txt'
     f = open(output_f, 'w')
@@ -158,3 +211,38 @@ def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASS
     f.write('   Vehicles: ' + str(vehicle))
     f.write('   Bike: ' + str(bike))
     f.close()
+
+def draw_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=True):
+    """
+    bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
+    """
+
+    num_classes = len(classes)
+    image_h, image_w, _ = image.shape
+    hsv_tuples = [(1.0 * x / num_classes, 1., 1.) for x in range(num_classes)]
+    colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
+    colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
+
+    random.seed(0)
+    random.shuffle(colors)
+    random.seed(None)
+
+    for i, bbox in enumerate(bboxes):
+        coor = np.array(bbox[:4], dtype=np.int32)
+        fontScale = 0.5
+        score = bbox[4]
+        class_ind = int(bbox[5])
+        bbox_color = colors[class_ind]
+        bbox_thick = int(0.6 * (image_h + image_w) / 600)
+        c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
+        cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
+
+        if show_label:
+            bbox_mess = '%s: %.2f' % (classes[class_ind], score)
+            t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick//2)[0]
+            cv2.rectangle(image, c1, (c1[0] + t_size[0], c1[1] - t_size[1] - 3), bbox_color, -1)  # filled
+
+            cv2.putText(image, bbox_mess, (c1[0], c1[1]-2), cv2.FONT_HERSHEY_SIMPLEX,
+                        fontScale, (0, 0, 0), bbox_thick//2, lineType=cv2.LINE_AA)
+
+    return image

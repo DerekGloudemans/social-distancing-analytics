@@ -7,19 +7,18 @@ based on detect.py from https://github.com/hunglc007/tensorflow-yolov4-tflite
 """
 import numpy as np
 import tensorflow as tf
-import time
+#import time
 import cv2
-from core.yolov4 import YOLOv4, YOLOv3_tiny, YOLOv3, decode
+from core.yolov4 import YOLOv4, decode #, YOLOv3_tiny, YOLOv3
 #from absl import app, flags, logging
 #from absl.flags import FLAGS
-from tensorflow.python.saved_model import tag_constants
+#from tensorflow.python.saved_model import tag_constants
 from core import utils
 from core.config import cfg
 from PIL import Image
-from tensorflow import keras
-from tensorflow.compat.v1 import ConfigProto
-from tensorflow.compat.v1 import InteractiveSession
-import simple_helper as sh
+#from tensorflow import keras
+#from tensorflow.compat.v1 import ConfigProto
+#from tensorflow.compat.v1 import InteractiveSession
 
 
 IMAGE_PATH = './data/kite.jpg'
@@ -47,7 +46,7 @@ def main():
     image_data = utils.image_preprocess(np.copy(original_image), [INPUT_SIZE, INPUT_SIZE])   
     image_data = image_data[np.newaxis, ...].astype(np.float32)
     
-    
+    'generate model'
     input_layer = tf.keras.Input([INPUT_SIZE, INPUT_SIZE, 3])
     
     feature_maps = YOLOv4(input_layer, NUM_CLASS)
@@ -61,7 +60,9 @@ def main():
     utils.load_weights(model, WEIGHTS)
 
 
-    model.summary()
+    # model.summary()
+    
+    
     # # config1 = model.get_config()
     # #config2 = model.get_weights()
     # tf.keras.models.save_model(model,'my_model')
@@ -71,15 +72,16 @@ def main():
     # # loaded_model = keras.Model.from_config(config1)
     # #loaded_model.set_weights()
     # loaded_model = tf.keras.models.load_model('my_model')
-    pred_bbox = model.predict(image_data)
-        
-    pred_bbox = sh.postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE)
-        
-    bboxes = sh.postprocess_boxes(pred_bbox, original_image_size, INPUT_SIZE, 0.25)
-    bboxes = sh.nms(bboxes, 0.213, method='nms')
-
     
-    sh.write_bbox_info(original_image, IMAGE_PATH, bboxes)
+    'make bboxes'
+    pred_bbox = model.predict(image_data)
+    #pred_bbox = model(image_data)
+    pred_bbox = utils.postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE)
+    bboxes = utils.postprocess_boxes(pred_bbox, original_image_size, INPUT_SIZE, 0.25)
+    bboxes = utils.nms(bboxes, 0.213, method='nms')
+
+    'output bbox info to file and show image'
+    utils.write_bbox_info(original_image, IMAGE_PATH, bboxes)
     image = utils.draw_bbox(original_image, bboxes)
     image = Image.fromarray(image)
     image.show()

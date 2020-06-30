@@ -83,6 +83,8 @@ def load_weights_v3(model, weights_file):
     assert len(wf.read()) == 0, 'failed to read all data'
     wf.close()
 
+# @tf.function
+
 def load_weights(model, weights_file):
     wf = open(weights_file, 'rb')
     major, minor, revision, seen, _ = np.fromfile(wf, dtype=np.int32, count=5)
@@ -91,6 +93,7 @@ def load_weights(model, weights_file):
     for i in range(110):
         conv_layer_name = 'conv2d_%d' %i if i > 0 else 'conv2d'
         bn_layer_name = 'batch_normalization_%d' %j if j > 0 else 'batch_normalization'
+
 
         conv_layer = model.get_layer(conv_layer_name)
         filters = conv_layer.filters
@@ -142,7 +145,7 @@ def get_anchors(anchors_path, tiny=False):
     else:
         return anchors.reshape(3, 3, 2)
 
-
+#@tf.function
 def image_preprocess(image, target_size, gt_boxes=None):
 
     ih, iw    = target_size
@@ -256,6 +259,7 @@ def bboxes_ciou(boxes1, boxes2):
 
     return iou - ciou_term
 
+#@tf.function
 def nms(bboxes, iou_threshold, sigma=0.3, method='nms'):
     """
     :param bboxes: (xmin, ymin, xmax, ymax, score, class)
@@ -296,6 +300,8 @@ def nms(bboxes, iou_threshold, sigma=0.3, method='nms'):
 def diounms_sort(bboxes, iou_threshold, sigma=0.3, method='nms', beta_nms=0.6):
     best_bboxes = []
     return best_bboxes
+
+#@tf.function
 def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
     for i, pred in enumerate(pred_bbox):
         conv_shape = pred.shape
@@ -317,6 +323,8 @@ def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
     pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
     pred_bbox = tf.concat(pred_bbox, axis=0)
     return pred_bbox
+
+#@tf.function
 def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
 
     valid_scale=[0, np.inf]
@@ -369,7 +377,6 @@ def unfreeze_all(model, frozen=False):
     if isinstance(model, tf.keras.Model):
         for l in model.layers:
             unfreeze_all(l, frozen)
-
 def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
     output_f = path[:-3] + 'txt'
     f = open(output_f, 'w')
@@ -393,6 +400,7 @@ def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASS
     f.close()
     
 #FIXME can get rid of above code by simple rewrite in detect.py
+#@tf.function
 def video_write_info(image, f, bboxes, dt, classes=read_class_names(cfg.YOLO.CLASSES)):
 
     ped = 0
@@ -402,20 +410,21 @@ def video_write_info(image, f, bboxes, dt, classes=read_class_names(cfg.YOLO.CLA
         class_ind = int(bbox[5])
         if classes[class_ind] == 'person':
             ped = ped + 1    
-        elif classes[class_ind] == 'bicycle':
-            bike = bike + 1
-        elif classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
-            vehicle = vehicle + 1
+        # elif classes[class_ind] == 'bicycle':
+        #     bike = bike + 1
+        # elif classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
+        #     vehicle = vehicle + 1
             
         
     
     # write image name + timestamp f.write()
     f.write(dt)
     f.write('\tPedestrians: ' + str(ped))
-    f.write('\tVehicles: ' + str(vehicle))
-    f.write('\tBikes: ' + str(bike))
+    # f.write('\tVehicles: ' + str(vehicle))
+    # f.write('\tBikes: ' + str(bike))
     f.write('\n')
     
+#@tf.function    
 def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=True):
     """
     bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
@@ -433,7 +442,7 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
 
     for i, bbox in enumerate(bboxes):
         class_ind = int(bbox[5])
-        if classes[class_ind] == 'person' or classes[class_ind] == 'bicycle' or classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
+        if classes[class_ind] == 'person': #or classes[class_ind] == 'bicycle' or classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
             coor = np.array(bbox[:4], dtype=np.int32)
             fontScale = 0.5
             score = bbox[4]
@@ -441,6 +450,8 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
             bbox_thick = int(0.6 * (image_h + image_w) / 600)
             c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
             cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
+            ###
+            draw_radius(image, c1, c2)
         
             if show_label:
                 bbox_mess = '%s: %.2f' % (classes[class_ind], score)
@@ -451,3 +462,38 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
                             fontScale, (0, 0, 0), bbox_thick//2, lineType=cv2.LINE_AA)
 
     return image
+
+###want to develop separate filter function, usable in a couple places
+# def filter_bboxes(bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
+#     people = [0]
+#     for i, bbox in enumerate(bboxes):
+#         class_ind = int(bbox[5])
+#         if classes[class_ind] == 'person':
+#             people.append(bbox)
+#     people = np.array(people)
+#     print (people)        
+#     return people
+            
+def draw_radius(image, c1, c2):
+    x = c1[0] + (c2[0] - c1[0]) // 2
+    y = c2[1]
+    make_circle(image, (x, y))
+    
+            
+def make_circles(frame, centers, size):
+    size = size[0] // 128
+    thickness = -1
+    line_type = 8
+    for center in centers:
+        pt = (int(center[0]), int(center[1]))
+        cv2.circle(frame, pt, size, (0,0,255), thickness, line_type)
+        
+def make_circle(frame, pt):
+    frame_size = frame.shape[:2]
+    size = frame_size[0] // 128
+    thickness = -1
+    line_type = 8
+    cv2.circle(frame, pt, size, (0,0,255), thickness, line_type)
+    
+
+    

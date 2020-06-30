@@ -10,12 +10,14 @@ class BatchNormalization(tf.keras.layers.BatchNormalization):
     stored moving `var` and `mean` in the "inference mode", and both `gama`
     and `beta` will not be updated !
     """
+   # @tf.function
     def call(self, x, training=False):
         if not training:
             training = tf.constant(False)
         training = tf.logical_and(training, self.trainable)
         return super().call(x, training)
 
+#@tf.function
 def convolutional(input_layer, filters_shape, downsample=False, activate=True, bn=True, activate_type='leaky'):
     if downsample:
         input_layer = tf.keras.layers.ZeroPadding2D(((1, 0), (1, 0)))(input_layer)

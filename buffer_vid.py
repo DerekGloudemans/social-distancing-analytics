@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun 15 15:03:56 2020
+Created on Thu Jun 18 15:09:09 2020
 
 @author: Nikki
-based on detect.py and detectvideo.py from https://github.com/hunglc007/tensorflow-yolov4-tflite
+extremely slow
+attempted buffer as implemented here: https://www.pyimagesearch.com/2017/02/06/faster-video-file-fps-with-cv2-videocapture-and-opencv/
 """
 
 
@@ -26,7 +27,7 @@ import sys
 from threading import Thread
 from queue import Queue
 #uncomment to verify that GPU is being used
-#tf.debugging.set_log_device_placement(True)
+tf.debugging.set_log_device_placement(True)
 
 #@tf.function
 
@@ -47,7 +48,7 @@ def main():
         #video_path = './data/20190422_153844_DA4A.mkv'
         
         print("Video from: ", video_path )
-        vid = cv2.VideoCapture(video_path)
+        #vid = cv2.VideoCapture(video_path)
         
         
         
@@ -74,8 +75,6 @@ def main():
         print('tensors started 4')
         model = tf.keras.Model(input_layer, bbox_tensors)
         print('model built')
-        
-        
         #force to run eagerly
         model.run_eagerly = True
         if model.run_eagerly:
@@ -83,27 +82,29 @@ def main():
         else:
             print ('hawhaw')
         utils.load_weights(model, WEIGHTS)
- 
-        #continue reading and showing frames until interrupted
-        try:
+        
+        with tf.device('/GPU:0'):
+            buf = Queue(maxsize=8)
+            # buf = VidThread(video_path)
+            # buf.start()
+            vid = cv2.VideoCapture(video_path)
+            coord = tf.train.Coordinator()
+            t = Thread(target=MyLoop, args=(video_path, buf,vid, coord))
+            t.daemon = True
+            #coord.register_thread(t)
+            t.start()
             
-            while True:
-                #skip desired number of frames to speed up processing
-                for i in range (10):
-                    vid.grab()
+        time.sleep(1.0)
+        
+        try:
+
+            while not buf.empty():
                 
-                #get current time - when using video streams, will be correct
-                dt = str(datetime.datetime.now())    
-                return_value, frame = vid.read()
-                
-                # check that the next frame exists
-                if return_value:
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    image = Image.fromarray(frame)
-                else:
-                    cv2.destroyWindow('result')
-                    print('Video has ended')
-                    break
+                frame = buf.get()
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                image = Image.fromarray(frame)
+                dt = str(datetime.datetime.now())
+               
                 frame_size = frame.shape[:2]
                 
                 #resize image and add another dimension
@@ -160,9 +161,28 @@ def main():
             vid.release()
             cv2.destroyAllWindows()
             f.close()
- 
-        
-        
+  
+def MyLoop(path, buff, vid, coord):       
+       
+    
+    while not coord.should_stop():
+        if not buff.full():
+            print('here')
+            #skip desired number of frames to speed up processing
+            for i in range (1):
+                vid.grab()
+               
+            return_value, frame = vid.read()
+            
+            if return_value:
+                buff.put(frame)
+                
+            else:
+                print('Video has ended')
+                coord.request_stop()
+            
+
         
 if __name__ == "__main__":
     main()
+

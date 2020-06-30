@@ -440,6 +440,7 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
     random.shuffle(colors)
     random.seed(None)
 
+    footpts = []
     for i, bbox in enumerate(bboxes):
         class_ind = int(bbox[5])
         if classes[class_ind] == 'person': #or classes[class_ind] == 'bicycle' or classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
@@ -451,7 +452,14 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
             c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
             cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
             ###
-            draw_radius(image, c1, c2)
+            
+            x = c1[0] + (c2[0] - c1[0]) // 2
+            y = c2[1]
+            pt = (x, y)
+            #print(pt)
+            #draw_radius(image, c1, c2)
+            footpts.append(pt)
+            
         
             if show_label:
                 bbox_mess = '%s: %.2f' % (classes[class_ind], score)
@@ -460,8 +468,9 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
         
                 cv2.putText(image, bbox_mess, (c1[0], c1[1]-2), cv2.FONT_HERSHEY_SIMPLEX,
                             fontScale, (0, 0, 0), bbox_thick//2, lineType=cv2.LINE_AA)
-
-    return image
+    footpts = np.array([footpts])
+    footpts = np.squeeze(np.asarray(footpts))
+    return image, footpts
 
 ###want to develop separate filter function, usable in a couple places
 # def filter_bboxes(bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):

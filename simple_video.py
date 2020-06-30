@@ -25,6 +25,7 @@ import datetime
 import sys
 from threading import Thread
 from queue import Queue
+import pixel_gps as pg
 #uncomment to verify that GPU is being used
 #tf.debugging.set_log_device_placement(True)
 
@@ -49,7 +50,7 @@ def main():
         print("Video from: ", video_path )
         vid = cv2.VideoCapture(video_path)
         
-        
+        GPS_pix, pix_GPS = pg.get_transform()
         
         
         print('thread started')
@@ -89,7 +90,7 @@ def main():
             
             while True:
                 #skip desired number of frames to speed up processing
-                for i in range (10):
+                for i in range (5):
                     vid.grab()
                 
                 #get current time - when using video streams, will be correct
@@ -135,7 +136,9 @@ def main():
                 #output bbox info to file and show image
                 #calculate and display time it took to process frame
                 utils.video_write_info(frame, f, bboxes, dt)
-                image = utils.draw_some_bbox(frame, bboxes)
+                image, pts = utils.draw_some_bbox(frame, bboxes)
+                image = pg.draw_radius(image, pts, GPS_pix, pix_GPS)
+                
                 
                 curr_time = time.time()
                 exec_time = curr_time - prev_time

@@ -23,8 +23,8 @@ import datetime
 #from tensorflow.compat.v1 import ConfigProto
 #from tensorflow.compat.v1 import InteractiveSession
 import sys
-from threading import Thread
-from queue import Queue
+#from threading import Thread
+#from queue import Queue
 import pixel_gps as pg
 #uncomment to verify that GPU is being used
 #tf.debugging.set_log_device_placement(True)
@@ -36,7 +36,7 @@ def main():
     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
     with strategy.scope():
     # if True:
-    
+        THROWOUT_NUM = 1
         STRIDES = np.array(cfg.YOLO.STRIDES)
         ANCHORS = utils.get_anchors(cfg.YOLO.ANCHORS)
         NUM_CLASS = len(utils.read_class_names(cfg.YOLO.CLASSES))
@@ -53,13 +53,22 @@ def main():
         GPS_pix, pix_GPS = pg.get_transform()
         
         
-        print('thread started')
         INPUT_SIZE = 419 #608 #230
+        
         #open file to output to
         output_f = video_path[:-3] + 'txt'
         f = open(output_f, 'w')
         print('file started')
-
+        f.write('Time\t\t\t\tPed\t<6ft\n')
+        
+        #define writer and output video properties
+        fps = vid.get(5)
+        wdt = int(vid.get(3))
+        hgt = int(vid.get(4))
+        fourcc = cv2.VideoWriter_fourcc(*'X264')
+        out_vid = cv2.VideoWriter('output8.mkv', fourcc, 10/THROWOUT_NUM, (wdt, hgt))
+        
+        
         
         #generate model
         input_layer = tf.keras.Input([INPUT_SIZE, INPUT_SIZE, 3])
@@ -90,7 +99,7 @@ def main():
             
             while True:
                 #skip desired number of frames to speed up processing
-                for i in range (5):
+                for i in range (THROWOUT_NUM):
                     vid.grab()
                 
                 #get current time - when using video streams, will be correct
@@ -135,10 +144,10 @@ def main():
                 
                 #output bbox info to file and show image
                 #calculate and display time it took to process frame
-                utils.video_write_info(frame, f, bboxes, dt)
-                image, pts = utils.draw_some_bbox(frame, bboxes)
-                image = pg.draw_radius(image, pts, GPS_pix, pix_GPS)
                 
+                image, pts = utils.draw_some_bbox(frame, bboxes)
+                image, count = pg.draw_radius(image, pts, GPS_pix, pix_GPS)
+                utils.video_write_info(frame, f, bboxes, dt, count)
                 
                 curr_time = time.time()
                 exec_time = curr_time - prev_time
@@ -146,13 +155,16 @@ def main():
                 print(info)
                 
                 result = np.asarray(image)
-                cv2.namedWindow("result", cv2.WINDOW_NORMAL)
+                #cv2.namedWindow("result", cv2.WINDOW_NORMAL)
                 result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR) #swapped image with result, not sure what the effect was
-                cv2.imshow("result", result)
+                #cv2.imshow("result", result)
+                
+                out_vid.write(result)
                 if cv2.waitKey(1) & 0xFF == ord('q'): break
         
             #end video, close viewer, stop writing to file
             vid.release()
+            out_vid.release()
             cv2.destroyAllWindows()
             f.close()
         
@@ -161,6 +173,7 @@ def main():
         except:
             print("Unexpected error:", sys.exc_info()[0])
             vid.release()
+            out_vid.release()
             cv2.destroyAllWindows()
             f.close()
  

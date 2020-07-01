@@ -401,7 +401,7 @@ def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASS
     
 #FIXME can get rid of above code by simple rewrite in detect.py
 #@tf.function
-def video_write_info(image, f, bboxes, dt, classes=read_class_names(cfg.YOLO.CLASSES)):
+def video_write_info(image, f, bboxes, dt, count, classes=read_class_names(cfg.YOLO.CLASSES)):
 
     ped = 0
     vehicle = 0
@@ -419,13 +419,14 @@ def video_write_info(image, f, bboxes, dt, classes=read_class_names(cfg.YOLO.CLA
     
     # write image name + timestamp f.write()
     f.write(dt)
-    f.write('\tPedestrians: ' + str(ped))
+    f.write('\t' + str(ped))
+    f.write('\t' + str(count))
     # f.write('\tVehicles: ' + str(vehicle))
     # f.write('\tBikes: ' + str(bike))
     f.write('\n')
     
 #@tf.function    
-def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=True):
+def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=False):
     """
     bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
     """
@@ -451,13 +452,12 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
             bbox_thick = int(0.6 * (image_h + image_w) / 600)
             c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
             cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
-            ###
             
+            #add points at base of feet to list
             x = c1[0] + (c2[0] - c1[0]) // 2
             y = c2[1]
             pt = (x, y)
-            #print(pt)
-            #draw_radius(image, c1, c2)
+        
             footpts.append(pt)
             
         
@@ -468,8 +468,11 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
         
                 cv2.putText(image, bbox_mess, (c1[0], c1[1]-2), cv2.FONT_HERSHEY_SIMPLEX,
                             fontScale, (0, 0, 0), bbox_thick//2, lineType=cv2.LINE_AA)
+    
+    #convert central foot points to numpy array            
     footpts = np.array([footpts])
     footpts = np.squeeze(np.asarray(footpts))
+    
     return image, footpts
 
 ###want to develop separate filter function, usable in a couple places
@@ -483,26 +486,6 @@ def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), sh
 #     print (people)        
 #     return people
             
-def draw_radius(image, c1, c2):
-    x = c1[0] + (c2[0] - c1[0]) // 2
-    y = c2[1]
-    make_circle(image, (x, y))
-    
-            
-def make_circles(frame, centers, size):
-    size = size[0] // 128
-    thickness = -1
-    line_type = 8
-    for center in centers:
-        pt = (int(center[0]), int(center[1]))
-        cv2.circle(frame, pt, size, (0,0,255), thickness, line_type)
-        
-def make_circle(frame, pt):
-    frame_size = frame.shape[:2]
-    size = frame_size[0] // 128
-    thickness = -1
-    line_type = 8
-    cv2.circle(frame, pt, size, (0,0,255), thickness, line_type)
-    
+   
 
     

@@ -28,10 +28,13 @@ def transform_pt_array(point_array,M):
     """
     Applies 3 x 3  image transformation matrix M to each point stored in the point array
     """
-    
+    if point_array.size <= 2:
+        point_array = point_array.flatten()
+        point_array = np.array([point_array])
     original_shape = point_array.shape
     
     num_points = int(np.size(point_array,0)*np.size(point_array,1)/2)
+    
     # resize array into N x 2 array
     reshaped = point_array.reshape((num_points,2))   
     
@@ -48,7 +51,6 @@ def transform_pt_array(point_array,M):
     tf_points[:,1] = tf_points3d[:,1]/tf_points3d[:,2]
     
     tf_point_array = tf_points.reshape(original_shape)
-    
     return tf_point_array
     
 def get_best_transform(x,y):

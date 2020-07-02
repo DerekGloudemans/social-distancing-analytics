@@ -19,8 +19,20 @@ import scipy.spatial
 #           - pix_GPS - matrix to convert from pixel to GPS
 ###
 
-def get_transform():
+def get_transform(name):
+    if name == 'aot21':
+        x, y, origin = aot_21_markers()
         
+    elif name == 'mrb3':
+        x, y, origin = mrb3_markers()
+    
+    GPS_pix = tran.get_best_transform(x, y)
+    pix_GPS = tran.get_best_transform(y, x)
+    
+    return(GPS_pix, pix_GPS, origin)
+
+
+def aot_21_markers():
     #get transfer function from known GPS and pixel locations
     a = np.array([36.148342, -86.799332])   #closest lamp
     b = np.array([36.148139, -86.799375])   #lamp across street, right
@@ -42,10 +54,29 @@ def get_transform():
     x = np.array([a,b,c,d])
     y = np.array([e,f,g,h])
     
-    GPS_pix = tran.get_best_transform(x, y)
-    pix_GPS = tran.get_best_transform(y, x)
+    #approx camera location aot_21
+    origin = np.array([36.148432, -86.799378])
     
-    return(GPS_pix, pix_GPS)
+    return (x, y, origin)
+
+def mrb3_markers():
+    #get transfer function from known GPS and pixel locations
+    a = np.array([36.144187, -86.799707])   #far left street pole
+    b = np.array([36.143990, -86.799594])   #pole by bike sign
+    c = np.array([36.143997, -86.800180])   #corner of sidewalk
+    d = np.array([36.144203, -86.800149])   #right of sidewalk stripe closest to camera
+      
+    e = np.array([18, 1151])
+    f = np.array([462, 210])
+    g = np.array([3286, 749])
+    h = np.array([2940, 2150])
+    
+    x = np.array([a,b,c,d])
+    y = np.array([e,f,g,h])
+    
+    #approx cam location mrb 3
+    origin = np.array([36.144322, -86.800059])
+    return (x, y, origin)
 
 
 
@@ -56,8 +87,9 @@ def get_transform():
 #   returns - img - input frame with ellipses drawn at specified points
 ###
 
-def draw_radius(frame, pts, GPS_pix, pix_GPS):
-    bounds = four_pts(pts, pix_GPS, GPS_pix) 
+def draw_radius(frame, pts, GPS_pix, pix_GPS, origin):
+
+    bounds = four_pts(pts, pix_GPS, GPS_pix, origin)
     mytree = load_tree(pts, pix_GPS)
     img, count = draw_ellipse(frame, bounds, pts, mytree, pix_GPS)
     return img, count
@@ -71,7 +103,7 @@ def draw_radius(frame, pts, GPS_pix, pix_GPS):
 #   returns - final - array of arrays of 4 pixel coordinates to be used to define each ellipse's axes
 ###
 
-def four_pts(pts, pix_GPS, GPS_pix):
+def four_pts(pts, pix_GPS, GPS_pix, origin):
     
     #convert to gps coords
     gps = tran.transform_pt_array(pts, pix_GPS)
@@ -79,15 +111,15 @@ def four_pts(pts, pix_GPS, GPS_pix):
     
     #calculate locations six feet away at given bearings and add to array
     for pt in gps:
-        degrees = calc_bearing(pt)
+        degrees = calc_bearing(pt, origin)
         for angle in degrees:
             a = six_ft(pt, angle)
             final.append(a)
-   
     #convert list of pts to numpy array
     final = np.array([final])
     final = np.squeeze(np.asarray(final))
-
+    
+    #check if final has any elements?
     #convert to pixel coords
     final = tran.transform_pt_array(final, GPS_pix)
     return final
@@ -104,9 +136,8 @@ def four_pts(pts, pix_GPS, GPS_pix):
 #             between camera and given pt)
 ###
         
-def calc_bearing(pt):
-    #approx camera location
-    origin = np.array([36.148432, -86.799378])
+def calc_bearing(pt, origin):
+
     
     #convert GPS coords to radians
     la1 = math.radians(origin[0])
@@ -153,7 +184,6 @@ def load_tree(pts, pix_GPS):
 ###
 
 def draw_ellipse(frame, pts, centers, mytree, pix_GPS):
-    
     #define qualities of the ellipse
     thickness = -1
     line_type = 8
@@ -173,30 +203,33 @@ def draw_ellipse(frame, pts, centers, mytree, pix_GPS):
         b = pts[i + 1]
         c = pts[i + 2]
         d = pts[i + 3]
-        
         minor = int((math.sqrt(math.pow((c[0]-a[0]), 2) + math.pow((c[1]-a[1]), 2)))/2)
         major = int((math.sqrt(math.pow((d[0]-b[0]), 2) + math.pow((d[1]-b[1]), 2)))/2)
         
+        if centers.size <= 2:
+            centers = np.array([centers])
         center = centers[i//4]
+        
         x = int(center[0])
         y = int(center[1])
         
-        gps_center = gps_centers[i//4]
-        dist, ind = mytree.query(gps_center, k=2)
-        closest = mytree.data[ind[1]]
-        dist = GPS_to_ft(gps_center, closest)
-        if dist < 6:
-            cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 0, 0), thickness, line_type)
-            count = count + 1
-        elif dist < 8:
-            cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 140, 0), thickness, line_type)
-        elif dist < 10:
-            cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 255, 0), thickness, line_type)            
+        if centers.size > 2:
+            gps_center = gps_centers[i//4]
+            dist, ind = mytree.query(gps_center, k=2)
+            closest = mytree.data[ind[1]]
+            dist = GPS_to_ft(gps_center, closest)
+            if dist < 6:
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 0, 0), thickness, line_type)
+                count = count + 1
+            elif dist < 8:
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 140, 0), thickness, line_type)
+            elif dist < 10:
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 255, 0), thickness, line_type)            
+            else:
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0,255,0), thickness, line_type)
         else:
             cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0,255,0), thickness, line_type)
-        
         i = i + 4
-    
     #combine original image and ellipse image into one
     all_img = cv2.addWeighted(ellipses, alpha, frame, 1-alpha, 0)
     return all_img, count
@@ -229,17 +262,6 @@ def six_ft(pt1, b):
     
     return(pt2) 
 
-
-
-
-###---------------------------------------------------------------------------
-#   Following functions are not utilized in video processing code, but were helpful
-#   during development
-###---------------------------------------------------------------------------
-
-
-
-
 ###---------------------------------------------------------------------------
 #   Given two GPS points, finds distance in ft between them, calulated using 
 #   haversine formula. 
@@ -267,6 +289,14 @@ def GPS_to_ft(pt1, pt2):
 
 
 
+
+
+###---------------------------------------------------------------------------
+#   Following functions are not utilized in video processing code, but were helpful
+#   during development
+###---------------------------------------------------------------------------
+
+
 ###---------------------------------------------------------------------------
 #   Given points, draws circles around them 
 ###
@@ -287,24 +317,31 @@ def make_circles(frame, centers, size):
 
 def test():
     # define where video comes from
-    video_path = './data/AOTsample3.mp4' 
+    # video_path = './data/AOTsample3.mp4' 
+    video_path = './data/20190422_153844_DA4A.mkv'
     
     # get transfer function from known GPS and pixel locations
     GPS_pix, pix_GPS = get_transform()
     
+    
     # load in sample pts
-    a = np.array([36.148342, -86.799332])   #closest lamp
-    b = np.array([36.148139, -86.799375])   #lamp across street, right
-    c = np.array([36.148349, -86.799135])   #closest left corner of furthest crosswalk dash to right
-    d = np.array([36.147740, -86.799218])   #sixth tree down the street
+    # a = np.array([36.148342, -86.799332])   #closest lamp
+    # b = np.array([36.148139, -86.799375])   #lamp across street, right
+    # c = np.array([36.148349, -86.799135])   #closest left corner of furthest crosswalk dash to right
+    # d = np.array([36.147740, -86.799218])   #sixth tree down the street
+    
+    a = np.array([36.144187, -86.799707])   #far left street pole
+    b = np.array([36.143990, -86.799594])   #pole by bike sign
+    c = np.array([36.143997, -86.800180])   #corner of sidewalk
+    d = np.array([36.144203, -86.800149])   #right of sidewalk stripe closest to camera
     x = np.array([a,b,c,d])
     
     pts = tran.transform_pt_array(x, GPS_pix)
+    print(pts)
     
     # start video
     print("Video from: ", video_path )
     vid = cv2.VideoCapture(video_path)
-    
     try:
         while True:
             # skip desired number of frames to speed up processing
@@ -313,7 +350,6 @@ def test():
             
             # read frame
             return_value, frame = vid.read()
-            
             # if frame doesn't exist, exit
             if not return_value:
                 cv2.destroyWindow('result')
@@ -321,7 +357,7 @@ def test():
                 break
             
             # draw ellipse
-            img = draw_radius(frame, pts, GPS_pix, pix_GPS)
+            img, count = draw_radius(frame, pts, GPS_pix, pix_GPS)
             cv2.namedWindow("result", cv2.WINDOW_NORMAL)
             cv2.imshow("result", img)
             if cv2.waitKey(1) & 0xFF == ord('q'): break

@@ -401,30 +401,43 @@ def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASS
     
 #FIXME can get rid of above code by simple rewrite in detect.py
 #@tf.function
-def video_write_info(image, f, bboxes, dt, count, classes=read_class_names(cfg.YOLO.CLASSES)):
-
+def video_write_info(f, bboxes, dt, count, people):
+    f.write(dt)
+    f.write('\t' + str(people))
+    f.write('\t' + str(count))
+    f.write('\n')
+    
+def count_people(bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
     ped = 0
-    vehicle = 0
-    bike = 0
     for i, bbox in enumerate(bboxes):
         class_ind = int(bbox[5])
         if classes[class_ind] == 'person':
-            ped = ped + 1    
-        # elif classes[class_ind] == 'bicycle':
-        #     bike = bike + 1
-        # elif classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
-        #     vehicle = vehicle + 1
+            ped = ped + 1 
             
+    return ped
         
+def overlay_occupancy(img, count, people, size):
+    occupants = 'Occupants : ' + str(people) + '  '
+    if people > 0:
+        comp = (1 - (count / people)) * 100
+    else:
+        comp = 100
+    compliance = '%s: %.2f %s' % ('Compliance', comp, '%')
+
+    y, x = size[0], size[1]
     
-    # write image name + timestamp f.write()
-    f.write(dt)
-    f.write('\t' + str(ped))
-    f.write('\t' + str(count))
-    # f.write('\tVehicles: ' + str(vehicle))
-    # f.write('\tBikes: ' + str(bike))
-    f.write('\n')
+    box = cv2.getTextSize(occupants + compliance, cv2.FONT_HERSHEY_DUPLEX, 2, 3)
     
+    offsetx = x//30 + box[0][0]
+    offsety = box[0][1]
+
+    #cv2.putText(img, compliance, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
+    cv2.putText(img, occupants + compliance, ((x - offsetx), (x//30)) , cv2.FONT_HERSHEY_DUPLEX, 2, (0,0,0), 3)
+        
+    #cv2.putText(img, compliance, ((x - offsetx), 2*(x//30) + offsety) , cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)        
+        
+        
+        
 #@tf.function    
 def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=False):
     """

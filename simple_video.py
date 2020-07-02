@@ -36,24 +36,31 @@ def main():
     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
     with strategy.scope():
     # if True:
-        THROWOUT_NUM = 1
+        THROWOUT_NUM = 5
         STRIDES = np.array(cfg.YOLO.STRIDES)
         ANCHORS = utils.get_anchors(cfg.YOLO.ANCHORS)
         NUM_CLASS = len(utils.read_class_names(cfg.YOLO.CLASSES))
         XYSCALE = cfg.YOLO.XYSCALE
         WEIGHTS = './data/yolov4.weights'   #must end in .weights
-        video_path = './data/road.mp4' 
-        video_path = './data/AOTsample3.mp4' 
+        
+        #video_path = './data/road.mp4' 
         #video_path = './data/vtest.avi'
-        #video_path = './data/20190422_153844_DA4A.mkv'
+        
+        video_path, GPS_pix, pix_GPS, origin = sample_select('aot21')
         
         print("Video from: ", video_path )
         vid = cv2.VideoCapture(video_path)
         
-        GPS_pix, pix_GPS = pg.get_transform()
+        wdt = int(vid.get(3))
+        hgt = int(vid.get(4))
+        print(wdt,hgt)
         
+        INPUT_SIZE = 419 #608 #230 #999 #800
         
-        INPUT_SIZE = 419 #608 #230
+        buf_size = 5
+        count_buf = buf_size * [0]
+        ind = 0
+        people_buf = buf_size * [0]
         
         #open file to output to
         output_f = video_path[:-3] + 'txt'
@@ -62,41 +69,41 @@ def main():
         f.write('Time\t\t\t\tPed\t<6ft\n')
         
         #define writer and output video properties
-        fps = vid.get(5)
-        wdt = int(vid.get(3))
-        hgt = int(vid.get(4))
-        fourcc = cv2.VideoWriter_fourcc(*'X264')
-        out_vid = cv2.VideoWriter('output8.mkv', fourcc, 10/THROWOUT_NUM, (wdt, hgt))
+        # fps = vid.get(5)
+        # wdt = int(vid.get(3))
+        # hgt = int(vid.get(4))
+        # fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        #out_vid = cv2.VideoWriter('testt.avi', fourcc, fps/THROWOUT_NUM, (wdt, hgt))
         
         
         
         #generate model
         input_layer = tf.keras.Input([INPUT_SIZE, INPUT_SIZE, 3])
-        print('tensors started 1')
+        print('input layer started')
         feature_maps = YOLOv4(input_layer, NUM_CLASS)
-        print('tensors started 2')
+        print('feature maps started')
         bbox_tensors = []
-        print('tensors started 3')
 
         for i, fm in enumerate(feature_maps):
             bbox_tensor = decode(fm, NUM_CLASS, i)
             bbox_tensors.append(bbox_tensor)
-        print('tensors started 4')
+        print('bbox tensors started')
+        
         model = tf.keras.Model(input_layer, bbox_tensors)
         print('model built')
         
         
         #force to run eagerly
         model.run_eagerly = True
-        if model.run_eagerly:
-            print ('yeeyee')
-        else:
-            print ('hawhaw')
+        # if model.run_eagerly:
+        #     print ('eager')
+        # else:
+        #     print ('not eager')
         utils.load_weights(model, WEIGHTS)
  
         #continue reading and showing frames until interrupted
         try:
-            
+           
             while True:
                 #skip desired number of frames to speed up processing
                 for i in range (THROWOUT_NUM):
@@ -146,8 +153,20 @@ def main():
                 #calculate and display time it took to process frame
                 
                 image, pts = utils.draw_some_bbox(frame, bboxes)
-                image, count = pg.draw_radius(image, pts, GPS_pix, pix_GPS)
-                utils.video_write_info(frame, f, bboxes, dt, count)
+               
+                if len(pts) > 0:
+                    image, count_buf[ind] = pg.draw_radius(image, pts, GPS_pix, pix_GPS, origin)
+                else:
+                    count_buf[ind] = 0
+                    
+                people_buf[ind] = utils.count_people(bboxes)
+
+                people = int(sum(people_buf)/len(people_buf))
+                count = int(sum(count_buf)/len(count_buf))
+                
+                utils.video_write_info(f, bboxes, dt, count, people)
+                utils.overlay_occupancy(image, count, people, frame_size)
+                
                 
                 curr_time = time.time()
                 exec_time = curr_time - prev_time
@@ -155,16 +174,17 @@ def main():
                 print(info)
                 
                 result = np.asarray(image)
-                #cv2.namedWindow("result", cv2.WINDOW_NORMAL)
+                cv2.namedWindow("result", cv2.WINDOW_NORMAL)
                 result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR) #swapped image with result, not sure what the effect was
-                #cv2.imshow("result", result)
+                cv2.imshow("result", result)
                 
-                out_vid.write(result)
+                #out_vid.write(result)
                 if cv2.waitKey(1) & 0xFF == ord('q'): break
-        
+                
+                ind = (ind + 1) % buf_size
             #end video, close viewer, stop writing to file
             vid.release()
-            out_vid.release()
+            #out_vid.release()
             cv2.destroyAllWindows()
             f.close()
         
@@ -173,12 +193,18 @@ def main():
         except:
             print("Unexpected error:", sys.exc_info()[0])
             vid.release()
-            out_vid.release()
+            #out_vid.release()
             cv2.destroyAllWindows()
             f.close()
  
-        
-        
+def sample_select(name):        
+    if name == 'aot21':
+        video_path = './data/AOTsample3.mp4'
+        GPS_pix, pix_GPS, origin = pg.get_transform(name)
+    elif name == 'mrb3':
+        video_path = './data/20190422_153844_DA4A.mkv'
+        GPS_pix, pix_GPS, origin = pg.get_transform(name)
+    return video_path, GPS_pix, pix_GPS, origin
         
 if __name__ == "__main__":
     main()

@@ -36,7 +36,7 @@ def main():
     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
     with strategy.scope():
     # if True:
-        THROWOUT_NUM = 5
+        
         STRIDES = np.array(cfg.YOLO.STRIDES)
         ANCHORS = utils.get_anchors(cfg.YOLO.ANCHORS)
         NUM_CLASS = len(utils.read_class_names(cfg.YOLO.CLASSES))
@@ -46,14 +46,23 @@ def main():
         #video_path = './data/road.mp4' 
         #video_path = './data/vtest.avi'
         
+        # pass either aot21 or mrb3
         video_path, GPS_pix, pix_GPS, origin = sample_select('aot21')
+        #video_path, GPS_pix, pix_GPS, origin = sample_select('mrb3')
+        
+        #wheter or not to save video to output file
+        record = True
+        output_vid= 'aot2.avi'
+        show_vid = True
+        #min is 1
+        THROWOUT_NUM = 1
         
         print("Video from: ", video_path )
         vid = cv2.VideoCapture(video_path)
         
-        wdt = int(vid.get(3))
-        hgt = int(vid.get(4))
-        print(wdt,hgt)
+        # wdt = int(vid.get(3))
+        # hgt = int(vid.get(4))
+        # print(wdt,hgt)
         
         INPUT_SIZE = 419 #608 #230 #999 #800
         
@@ -69,11 +78,12 @@ def main():
         f.write('Time\t\t\t\tPed\t<6ft\n')
         
         #define writer and output video properties
-        # fps = vid.get(5)
-        # wdt = int(vid.get(3))
-        # hgt = int(vid.get(4))
-        # fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-        #out_vid = cv2.VideoWriter('testt.avi', fourcc, fps/THROWOUT_NUM, (wdt, hgt))
+        if record:
+            fps = vid.get(5)
+            wdt = int(vid.get(3))
+            hgt = int(vid.get(4))
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            out_vid = cv2.VideoWriter(output_vid, fourcc, fps/THROWOUT_NUM, (wdt, hgt))
         
         
         
@@ -116,9 +126,10 @@ def main():
                 # check that the next frame exists
                 if return_value:
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    image = Image.fromarray(frame)
+                    #image = Image.fromarray(frame)
                 else:
-                    cv2.destroyWindow('result')
+                    if show_vid:
+                        cv2.destroyWindow('result')
                     print('Video has ended')
                     break
                 frame_size = frame.shape[:2]
@@ -145,47 +156,57 @@ def main():
                 #make bboxes
                 pred_bbox = model.predict(image_data)
                 pred_bbox = utils.postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE)
-                bboxes = utils.postprocess_boxes(pred_bbox, frame_size, INPUT_SIZE, 0.25)
-                bboxes = utils.nms(bboxes, 0.213, method='nms')
-                
-                
-                #output bbox info to file and show image
-                #calculate and display time it took to process frame
-                
-                image, pts = utils.draw_some_bbox(frame, bboxes)
-               
-                if len(pts) > 0:
-                    image, count_buf[ind] = pg.draw_radius(image, pts, GPS_pix, pix_GPS, origin)
+                bboxes = utils.postprocess_boxes(pred_bbox, frame_size, INPUT_SIZE, 0.25)#.25
+    
+                if len(bboxes) > 0:
+                    bboxes = utils.nms(bboxes, 0.213, method='nms') #.213
+                    
+                    #output bbox info to file and show image
+                    #calculate and display time it took to process frame
+                    
+                    frame, pts = utils.draw_some_bbox(frame, bboxes)
+                   
+                    if len(pts) > 0:
+                        frame, count_buf[ind] = pg.draw_radius(frame, pts, GPS_pix, pix_GPS, origin)
+                    else:
+                        count_buf[ind] = 0
+                        
+                    people_buf[ind] = utils.count_people(bboxes)
                 else:
                     count_buf[ind] = 0
+                    people_buf[ind] = 0
                     
-                people_buf[ind] = utils.count_people(bboxes)
-
                 people = int(sum(people_buf)/len(people_buf))
                 count = int(sum(count_buf)/len(count_buf))
                 
                 utils.video_write_info(f, bboxes, dt, count, people)
-                utils.overlay_occupancy(image, count, people, frame_size)
-                
+                utils.overlay_occupancy(frame, count, people, frame_size)
                 
                 curr_time = time.time()
                 exec_time = curr_time - prev_time
                 info = "time2: %.2f ms" %(1000*exec_time)
                 print(info)
                 
-                result = np.asarray(image)
-                cv2.namedWindow("result", cv2.WINDOW_NORMAL)
-                result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR) #swapped image with result, not sure what the effect was
-                cv2.imshow("result", result)
                 
-                #out_vid.write(result)
+                result = np.asarray(frame)
+                result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+                
+                if show_vid:
+                    cv2.namedWindow("result", cv2.WINDOW_NORMAL)
+                    cv2.imshow("result", result)
+                
+                if record:
+                    out_vid.write(result)
                 if cv2.waitKey(1) & 0xFF == ord('q'): break
                 
                 ind = (ind + 1) % buf_size
             #end video, close viewer, stop writing to file
             vid.release()
-            #out_vid.release()
-            cv2.destroyAllWindows()
+            
+            if record:
+                out_vid.release()
+            if show_vid:
+                cv2.destroyAllWindows()
             f.close()
         
         
@@ -193,8 +214,11 @@ def main():
         except:
             print("Unexpected error:", sys.exc_info()[0])
             vid.release()
-            #out_vid.release()
-            cv2.destroyAllWindows()
+            
+            if record == True:
+                out_vid.release()
+            if show_vid:
+                cv2.destroyAllWindows()
             f.close()
  
 def sample_select(name):        

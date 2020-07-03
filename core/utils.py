@@ -322,18 +322,23 @@ def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
 
     pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
     pred_bbox = tf.concat(pred_bbox, axis=0)
+    
     return pred_bbox
 
 #@tf.function
 def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
 
     valid_scale=[0, np.inf]
+    
+    #convert to numpy array
     pred_bbox = np.array(pred_bbox)
 
+    #separate out box dimensions nd and probability
     pred_xywh = pred_bbox[:, 0:4]
     pred_conf = pred_bbox[:, 4]
     pred_prob = pred_bbox[:, 5:]
 
+    #find corners of bboxes and scale properly
     # # (1) (x, y, w, h) --> (xmin, ymin, xmax, ymax)
     pred_coor = np.concatenate([pred_xywh[:, :2] - pred_xywh[:, 2:] * 0.5,
                                 pred_xywh[:, :2] + pred_xywh[:, 2:] * 0.5], axis=-1)
@@ -350,22 +355,66 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
     # # (3) clip some boxes those are out of range
     pred_coor = np.concatenate([np.maximum(pred_coor[:, :2], [0, 0]),
                                 np.minimum(pred_coor[:, 2:], [org_w - 1, org_h - 1])], axis=-1)
+    #mask out cvordinates that are not in viewable space
     invalid_mask = np.logical_or((pred_coor[:, 0] > pred_coor[:, 2]), (pred_coor[:, 1] > pred_coor[:, 3]))
     pred_coor[invalid_mask] = 0
 
     # # (4) discard some invalid boxes
+    # ensures bbox scale is positive
     bboxes_scale = np.sqrt(np.multiply.reduce(pred_coor[:, 2:4] - pred_coor[:, 0:2], axis=-1))
     scale_mask = np.logical_and((valid_scale[0] < bboxes_scale), (bboxes_scale < valid_scale[1]))
 
     # # (5) discard some boxes with low scores
     classes = np.argmax(pred_prob, axis=-1)
+
+    # print(np.arange(len(pred_coor)))
+    # print(pred_prob[np.arange(len(pred_coor)), classes])
     scores = pred_conf * pred_prob[np.arange(len(pred_coor)), classes]
     # scores = pred_prob[np.arange(len(pred_coor)), classes]
     score_mask = scores > score_threshold
     mask = np.logical_and(scale_mask, score_mask)
-    coors, scores, classes = pred_coor[mask], scores[mask], classes[mask]
+    
+    #qualities of bounding boxm - trims out all bboxes that aren't within screen, properly scaled, too low of a score
+    # coors, scores, classes = pred_coor[mask], scores[mask], classes[mask]
+    # bboxes = np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
+    # print(classes.shape)
+    # print(scores.shape)
+    # print(coors.shape)
+    
+    
+    coors, scores, probs, classes = pred_coor[mask], scores[mask], pred_prob[mask], classes[mask]
+    # print('a1')
+    # #print(pred_prob)
+    # print(pred_prob.shape)
+    # print(pred_prob[mask].shape)
+    # print(classes2.shape)
+    # print(scores2.shape)
+    # print(coors2.shape)
+    # #print(pred_prob[mask])
+    
+    bboxes = np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
+    #bboxes2 = np.concatenate([coors, scores[:, np.newaxis], probs], axis=-1)
+    #print(bboxes2.shape)
+        
+    people_bboxes = []
+        #need to sort out people
+        
+    for i, prob in enumerate(probs): 
+        if classes[i] == 0:
+            light = prob[9]
+            fire = prob[10]
+            stop = prob[11]
+            parking = prob[12]
+            bench = prob[13]
+            # print(prob[0])
+            # print(prob[9:14])
+            if (light < 0.001 and fire < 0.0005 and stop < 0.001 and parking < 0.001 and bench < 0.001):
+                people_bboxes.append(bboxes[i])
 
-    return np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
+    people_bboxes = np.array(people_bboxes)
+
+    # #return np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
+    return people_bboxes
 
 def freeze_all(model, frozen=True):
     model.trainable = not frozen

@@ -184,34 +184,34 @@ import time
 
 ### figuring out what a pixel's location is
 
-# import cv2      # import the OpenCV library                     
-# import numpy as np  # import the numpy library
+import cv2      # import the OpenCV library                     
+import numpy as np  # import the numpy library
 
-# font = cv2.FONT_HERSHEY_SIMPLEX
+font = cv2.FONT_HERSHEY_SIMPLEX
 
-# video_capture = cv2.VideoCapture('./data/20190422_153844_DA4A.mkv')
+video_capture = cv2.VideoCapture('./data/video/AOTsample2.mp4')
 
-# def mouseHandler(event, x, y, flags, params):
-#     if event == cv2.EVENT_LBUTTONDOWN:
-#         print(x, y)
-#         cv2.circle(frame, (x, y), 3, (255, 0, 0), -1)
+def mouseHandler(event, x, y, flags, params):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        print(x, y)
+        cv2.circle(frame, (x, y), 3, (255, 0, 0), -1)
 
-# cv2.namedWindow("result", cv2.WINDOW_NORMAL)
-# cv2.setMouseCallback("result", mouseHandler)
+cv2.namedWindow("result", cv2.WINDOW_NORMAL)
+cv2.setMouseCallback("result", mouseHandler)
 
 
-# while(True):
+while(True):
 
-#     # Capture frame-by-frame
-#     _, frame = video_capture.read()
+    # Capture frame-by-frame
+    _, frame = video_capture.read()
 
-#     if cv2.waitKey(1) & 0xFF == ord('q'):
-#         break
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-#     cv2.imshow("result", frame)
+    cv2.imshow("result", frame)
 
-# video_capture.release()
-# cv2.destroyAllWindows() 
+video_capture.release()
+cv2.destroyAllWindows() 
 
 
 ###calculating transformation matrix
@@ -297,34 +297,34 @@ import time
 
 # print(np.squeeze(np.asarray(final3)))
 
-import transform as tran
-# a = np.array([36.144187, -86.799707])   #far left street pole
-# b = np.array([36.143990, -86.799594])   #pole by bike sign
-# c = np.array([36.143997, -86.800180])   #corner of sidewalk
-# d = np.array([36.144203, -86.800149])   #right of sidewalk stripe closest to camera
+# import transform as tran
+# # a = np.array([36.144187, -86.799707])   #far left street pole
+# # b = np.array([36.143990, -86.799594])   #pole by bike sign
+# # c = np.array([36.143997, -86.800180])   #corner of sidewalk
+# # d = np.array([36.144203, -86.800149])   #right of sidewalk stripe closest to camera
   
-# e = np.array([18, 1151])
-# f = np.array([462, 210])
-# g = np.array([3286, 749])
-# h = np.array([2940, 2150])
+# # e = np.array([18, 1151])
+# # f = np.array([462, 210])
+# # g = np.array([3286, 749])
+# # h = np.array([2940, 2150])
 
-# x = np.array([a,b,c,d])
-# y = np.array([e,f,g,h])
+# # x = np.array([a,b,c,d])
+# # y = np.array([e,f,g,h])
 
-# m = tran.get_best_transform(x, y)
-m = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+# # m = tran.get_best_transform(x, y)
+# m = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
 
-a = np.array([[23, 43], [23, 23]])
-b = np.array([[23, 43]])
-c = np.array([[]])
-# print(b.shape)
-# print(b.size)
-# print(b.flatten())
-# c = np.array([b])
-# print(tran.transform_pt_array(a,m))
+# a = np.array([[23, 43], [23, 23]])
+# b = np.array([[23, 43]])
+# c = np.array([[]])
+# # print(b.shape)
+# # print(b.size)
+# # print(b.flatten())
+# # c = np.array([b])
+# # print(tran.transform_pt_array(a,m))
 
-# print(a.size)
-print(tran.transform_pt_array(c,m))
+# # print(a.size)
+# print(tran.transform_pt_array(c,m))
 
 
 

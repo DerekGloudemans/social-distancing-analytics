@@ -7,10 +7,36 @@ Created on Mon Jun 29 14:14:45 2020
 
 import numpy as np
 import cv2
-import transform as tran
+import transform as tform
 import sys
 import math
 import scipy.spatial
+
+###---------------------------------------------------------------------------
+#   Allows video to be initialized using a string
+#
+#   returns - video_path - path to video to be used
+#   returns - GPS_pix - matrix to convert from GPS to pixel
+#           - pix_GPS - matrix to convert from pixel to GPS
+#           - origin - approximate camera location in GPS 
+###
+
+def sample_select(name):        
+    if name == 'aot3':
+        video_path = './data/video/AOTsample3.mp4'
+    elif name == 'mrb3':
+        video_path = './data/video/20190422_153844_DA4A.mkv'
+    elif name == 'aot1':
+        video_path = './data/video/AOTsample1_1.mp4'
+    elif name == 'aot2':
+        video_path = './data/video/AOTsample2_1.mp4'
+        
+    GPS_pix, pix_GPS, origin = get_transform(name)
+
+    return video_path, GPS_pix, pix_GPS, origin
+        
+
+
 
 ###---------------------------------------------------------------------------
 #   Used to find transformation matrices between GPS and pixel space and vice versa.
@@ -20,19 +46,33 @@ import scipy.spatial
 ###
 
 def get_transform(name):
-    if name == 'aot21':
-        x, y, origin = aot_21_markers()
+    if name == 'aot3':
+        x, y, origin = aot_3_markers()
         
     elif name == 'mrb3':
         x, y, origin = mrb3_markers()
+        
+    elif name == 'aot1':
+        x, y, origin = aot_1_markers()
     
-    GPS_pix = tran.get_best_transform(x, y)
-    pix_GPS = tran.get_best_transform(y, x)
+    elif name == 'aot2':
+        x, y, origin = aot_2_markers()
+        
+    GPS_pix = tform.get_best_transform(x, y)
+    pix_GPS = tform.get_best_transform(y, x)
     
     return(GPS_pix, pix_GPS, origin)
 
 
-def aot_21_markers():
+
+###---------------------------------------------------------------------------
+#   Contains GPS and pixel information for AOT on 21 Ave
+#
+#   returns - x - GPS location of 4 pts
+#           - y - pixel locations of corresponding 4 pts
+#           - origin - approximate camera location in GPS
+
+def aot_3_markers():
     #get transfer function from known GPS and pixel locations
     a = np.array([36.148342, -86.799332])   #closest lamp
     b = np.array([36.148139, -86.799375])   #lamp across street, right
@@ -54,10 +94,66 @@ def aot_21_markers():
     x = np.array([a,b,c,d])
     y = np.array([e,f,g,h])
     
-    #approx camera location aot_21
+    #approx camera location aot_3
     origin = np.array([36.148432, -86.799378])
     
     return (x, y, origin)
+
+
+
+###---------------------------------------------------------------------------
+#   Contains GPS and pixel information for AOT on 21 Ave
+
+def aot_2_markers():
+    #get transfer function from known GPS and pixel locations
+    a = np.array([36.150310, -86.801245])   #far left corner of yellow strip before crosswalk
+    b = np.array([36.150623, -86.801172])   #front right corner of DGX
+    c = np.array([36.150479, -86.801590])   #Ruth's Chris leftmost door under tent
+    d = np.array([36.150239, -86.801372])   #front of line in sidewalk
+    
+    e = np.array([2227, 1416])
+    f = np.array([2234, 789])
+    g = np.array([362, 758])
+    h = np.array([220, 1679])
+
+    
+    
+    x = np.array([a,b,c,d])
+    y = np.array([e,f,g,h])
+    
+    #approx camera location aot_3
+    origin = np.array([36.150190, -86.801302])
+    
+    return (x, y, origin)
+
+###---------------------------------------------------------------------------
+#   Contains GPS and pixel information for AOT on 21 Ave
+
+def aot_1_markers():
+    #get transfer function from known GPS and pixel locations
+    a = np.array([36.150191, -86.801195])   #edge of brick curve closest to center
+    b = np.array([36.150494, -86.800601])   #base of sign in between cars closer to qdoba building
+    c = np.array([36.150951, -86.800553])   #corner of t-mobile store
+    d = np.array([36.150310, -86.801245])   #far left corner of yellow strip before crosswalk
+
+    e = np.array([2227, 1547])
+    f = np.array([1640, 544])
+    g = np.array([752, 524])
+    h = np.array([137, 1370])
+
+    
+    x = np.array([a,b,c,d])
+    y = np.array([e,f,g,h])
+    
+    #approx camera location aot_1
+    origin = np.array([36.150190, -86.801302])
+    
+    return (x, y, origin)
+
+
+
+###---------------------------------------------------------------------------
+#   Contains GPS and pixel information for mrb3 camera
 
 def mrb3_markers():
     #get transfer function from known GPS and pixel locations
@@ -106,7 +202,7 @@ def draw_radius(frame, pts, GPS_pix, pix_GPS, origin):
 def four_pts(pts, pix_GPS, GPS_pix, origin):
     
     #convert to gps coords
-    gps = tran.transform_pt_array(pts, pix_GPS)
+    gps = tform.transform_pt_array(pts, pix_GPS)
     final = []
     
     #calculate locations six feet away at given bearings and add to array
@@ -121,7 +217,7 @@ def four_pts(pts, pix_GPS, GPS_pix, origin):
     
     #check if final has any elements?
     #convert to pixel coords
-    final = tran.transform_pt_array(final, GPS_pix)
+    final = tform.transform_pt_array(final, GPS_pix)
     return final
 
 
@@ -169,7 +265,7 @@ def calc_bearing(pt, origin):
 ###
 
 def load_tree(pts, pix_GPS):
-    gps = tran.transform_pt_array(pts, pix_GPS)
+    gps = tform.transform_pt_array(pts, pix_GPS)
     mytree = scipy.spatial.cKDTree(gps)
       
     return mytree
@@ -189,7 +285,7 @@ def draw_ellipse(frame, pts, centers, mytree, pix_GPS):
     line_type = 8
     
     #set transparency
-    alpha = 0.4
+    alpha = 0.25
     
     #create separate image for ellipses to be drawn into
     ellipses = frame.copy()
@@ -197,7 +293,7 @@ def draw_ellipse(frame, pts, centers, mytree, pix_GPS):
     #iterate through list of ellipse points and centers, drawing each into ellipse image    
     i = 0
     count = 0
-    gps_centers = tran.transform_pt_array(centers, pix_GPS)
+    gps_centers = tform.transform_pt_array(centers, pix_GPS)
     while i < pts.shape[0]:
         a = pts[i]
         b = pts[i + 1]
@@ -336,7 +432,7 @@ def test():
     d = np.array([36.144203, -86.800149])   #right of sidewalk stripe closest to camera
     x = np.array([a,b,c,d])
     
-    pts = tran.transform_pt_array(x, GPS_pix)
+    pts = tform.transform_pt_array(x, GPS_pix)
     print(pts)
     
     # start video

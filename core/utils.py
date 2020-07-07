@@ -355,7 +355,7 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
     # # (3) clip some boxes those are out of range
     pred_coor = np.concatenate([np.maximum(pred_coor[:, :2], [0, 0]),
                                 np.minimum(pred_coor[:, 2:], [org_w - 1, org_h - 1])], axis=-1)
-    #mask out cvordinates that are not in viewable space
+    #mask out coordinates that are not in viewable space
     invalid_mask = np.logical_or((pred_coor[:, 0] > pred_coor[:, 2]), (pred_coor[:, 1] > pred_coor[:, 3]))
     pred_coor[invalid_mask] = 0
 
@@ -366,54 +366,35 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
 
     # # (5) discard some boxes with low scores
     classes = np.argmax(pred_prob, axis=-1)
-
-    # print(np.arange(len(pred_coor)))
-    # print(pred_prob[np.arange(len(pred_coor)), classes])
     scores = pred_conf * pred_prob[np.arange(len(pred_coor)), classes]
     # scores = pred_prob[np.arange(len(pred_coor)), classes]
     score_mask = scores > score_threshold
     mask = np.logical_and(scale_mask, score_mask)
     
     #qualities of bounding boxm - trims out all bboxes that aren't within screen, properly scaled, too low of a score
-    # coors, scores, classes = pred_coor[mask], scores[mask], classes[mask]
-    # bboxes = np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
-    # print(classes.shape)
-    # print(scores.shape)
-    # print(coors.shape)
-    
-    
     coors, scores, probs, classes = pred_coor[mask], scores[mask], pred_prob[mask], classes[mask]
-    # print('a1')
-    # #print(pred_prob)
-    # print(pred_prob.shape)
-    # print(pred_prob[mask].shape)
-    # print(classes2.shape)
-    # print(scores2.shape)
-    # print(coors2.shape)
-    # #print(pred_prob[mask])
-    
     bboxes = np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
-    #bboxes2 = np.concatenate([coors, scores[:, np.newaxis], probs], axis=-1)
-    #print(bboxes2.shape)
-        
+
+    #list of bboxes that mark a person
     people_bboxes = []
-        #need to sort out people
-        
+
+    # takes objects primarily identified as a person and filters out ones with relatively high chances
+    # of being non-human
     for i, prob in enumerate(probs): 
         if classes[i] == 0:
+            #commonly mistaken objects
             light = prob[9]
             fire = prob[10]
             stop = prob[11]
             parking = prob[12]
             bench = prob[13]
-            # print(prob[0])
-            # print(prob[9:14])
-            if (light < 0.001 and fire < 0.0005 and stop < 0.001 and parking < 0.001 and bench < 0.001):
+            #print(prob[9:14])
+            if (light < 0.002 and fire < 0.002 and stop < 0.002 and parking < 0.002 and bench < 0.002): 
+                #(light < 0.001 and fire < 0.0005 and stop < 0.001 and parking < 0.001 and bench < 0.001):
                 people_bboxes.append(bboxes[i])
 
     people_bboxes = np.array(people_bboxes)
 
-    # #return np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
     return people_bboxes
 
 def freeze_all(model, frozen=True):
@@ -426,29 +407,8 @@ def unfreeze_all(model, frozen=False):
     if isinstance(model, tf.keras.Model):
         for l in model.layers:
             unfreeze_all(l, frozen)
-def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
-    output_f = path[:-3] + 'txt'
-    f = open(output_f, 'w')
-    
-    ped = 0
-    vehicle = 0
-    bike = 0
-    for i, bbox in enumerate(bboxes):
-        class_ind = int(bbox[5])
-        if classes[class_ind] == 'person':
-            ped = ped + 1    
-        elif classes[class_ind] == 'bicycle':
-            bike = bike + 1
-        elif classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
-            vehicle = vehicle + 1
-    
-    # write image name + timestamp f.write()
-    f.write('Pedestrians: ' + str(ped))
-    f.write('   Vehicles: ' + str(vehicle))
-    f.write('   Bike: ' + str(bike))
-    f.close()
-    
-#FIXME can get rid of above code by simple rewrite in detect.py
+            
+
 #@tf.function
 def video_write_info(f, bboxes, dt, count, people):
     f.write(dt)
@@ -456,98 +416,130 @@ def video_write_info(f, bboxes, dt, count, people):
     f.write('\t' + str(count))
     f.write('\n')
     
-def count_people(bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
-    ped = 0
-    for i, bbox in enumerate(bboxes):
-        class_ind = int(bbox[5])
-        if classes[class_ind] == 'person':
-            ped = ped + 1 
-            
-    return ped
+
         
 def overlay_occupancy(img, count, people, size):
+    
     occupants = 'Occupants : ' + str(people) + '  '
+    
+    #compliance is 100 if no people are present
     if people > 0:
         comp = (1 - (count / people)) * 100
     else:
         comp = 100
     compliance = '%s: %.2f %s' % ('Compliance', comp, '%')
 
-    y, x = size[0], size[1]
-    
+    #calculate size text will occupy, then adjust so overlay appears in top right corner
+    x = size[1]
     box = cv2.getTextSize(occupants + compliance, cv2.FONT_HERSHEY_DUPLEX, 2, 3)
-    
     offsetx = x//30 + box[0][0]
-    offsety = box[0][1]
-
-    #cv2.putText(img, compliance, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
     cv2.putText(img, occupants + compliance, ((x - offsetx), (x//30)) , cv2.FONT_HERSHEY_DUPLEX, 2, (0,0,0), 3)
         
-    #cv2.putText(img, compliance, ((x - offsetx), 2*(x//30) + offsety) , cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)        
-        
-        
-        
-#@tf.function    
-def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=False):
-    """
-    bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
-    """
-
-    num_classes = len(classes)
-    image_h, image_w, _ = image.shape
-    hsv_tuples = [(1.0 * x / num_classes, 1., 1.) for x in range(num_classes)]
-    colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
-    colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
-
-    random.seed(0)
-    random.shuffle(colors)
-    random.seed(None)
-
+def get_ftpts(bboxes):
+    
     footpts = []
+    
+    #get ftpts for each bbox
     for i, bbox in enumerate(bboxes):
-        class_ind = int(bbox[5])
-        if classes[class_ind] == 'person': #or classes[class_ind] == 'bicycle' or classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
-            coor = np.array(bbox[:4], dtype=np.int32)
-            fontScale = 0.5
-            score = bbox[4]
-            bbox_color = colors[class_ind]
-            bbox_thick = int(0.6 * (image_h + image_w) / 600)
-            c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
-            cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
-            
-            #add points at base of feet to list
-            x = c1[0] + (c2[0] - c1[0]) // 2
-            y = c2[1]
-            pt = (x, y)
         
-            footpts.append(pt)
-            
-        
-            if show_label:
-                bbox_mess = '%s: %.2f' % (classes[class_ind], score)
-                t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick//2)[0]
-                cv2.rectangle(image, c1, (c1[0] + t_size[0], c1[1] - t_size[1] - 3), bbox_color, -1)  # filled
-        
-                cv2.putText(image, bbox_mess, (c1[0], c1[1]-2), cv2.FONT_HERSHEY_SIMPLEX,
-                            fontScale, (0, 0, 0), bbox_thick//2, lineType=cv2.LINE_AA)
+        #corner points of box
+        coor = np.array(bbox[:4], dtype=np.int32)
+        c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
+
+        #add points at base of feet to list
+        x = c1[0] + (c2[0] - c1[0]) // 2
+        y = c2[1]
+        pt = (x, y)
+    
+        footpts.append(pt) 
     
     #convert central foot points to numpy array            
     footpts = np.array([footpts])
     footpts = np.squeeze(np.asarray(footpts))
     
-    return image, footpts
+    return footpts
 
-###want to develop separate filter function, usable in a couple places
-# def filter_bboxes(bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
-#     people = [0]
+        
+# #@tf.function    
+# def draw_some_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=False):
+#     """
+#     bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
+#     """
+
+#     num_classes = len(classes)
+#     image_h, image_w, _ = image.shape
+#     hsv_tuples = [(1.0 * x / num_classes, 1., 1.) for x in range(num_classes)]
+#     colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
+#     colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
+
+#     random.seed(0)
+#     random.shuffle(colors)
+#     random.seed(None)
+
+#     footpts = []
+#     for i, bbox in enumerate(bboxes):
+#         class_ind = int(bbox[5])
+#         coor = np.array(bbox[:4], dtype=np.int32)
+#         fontScale = 0.5
+#         score = bbox[4]
+#         bbox_color = colors[class_ind]
+#         bbox_thick = int(0.6 * (image_h + image_w) / 600)
+#         c1, c2 = (coor[0], coor[1]), (coor[2], coor[3])
+#         cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
+        
+#         #add points at base of feet to list
+#         x = c1[0] + (c2[0] - c1[0]) // 2
+#         y = c2[1]
+#         pt = (x, y)
+    
+#         footpts.append(pt)
+        
+    
+#         if show_label:
+#             bbox_mess = '%s: %.2f' % (classes[class_ind], score)
+#             t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick//2)[0]
+#             cv2.rectangle(image, c1, (c1[0] + t_size[0], c1[1] - t_size[1] - 3), bbox_color, -1)  # filled
+    
+#             cv2.putText(image, bbox_mess, (c1[0], c1[1]-2), cv2.FONT_HERSHEY_SIMPLEX,
+#                         fontScale, (0, 0, 0), bbox_thick//2, lineType=cv2.LINE_AA)
+    
+#     #convert central foot points to numpy array            
+#     footpts = np.array([footpts])
+#     footpts = np.squeeze(np.asarray(footpts))
+    
+#     return image, footpts
+
+# def write_bbox_info(image, path, bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
+#     output_f = path[:-3] + 'txt'
+#     f = open(output_f, 'w')
+    
+#     ped = 0
+#     vehicle = 0
+#     bike = 0
 #     for i, bbox in enumerate(bboxes):
 #         class_ind = int(bbox[5])
 #         if classes[class_ind] == 'person':
-#             people.append(bbox)
-#     people = np.array(people)
-#     print (people)        
-#     return people
+#             ped = ped + 1    
+#         elif classes[class_ind] == 'bicycle':
+#             bike = bike + 1
+#         elif classes[class_ind] == 'motorbike' or classes[class_ind] == 'car' or classes[class_ind] == 'truck' or classes[class_ind] == 'bus':
+#             vehicle = vehicle + 1
+    
+#     # write image name + timestamp f.write()
+#     f.write('Pedestrians: ' + str(ped))
+#     f.write('   Vehicles: ' + str(vehicle))
+#     f.write('   Bike: ' + str(bike))
+#     f.close()
+    
+#FIXME can get rid of above code by simple rewrite in detect.py
             
-   
+  # def count_people(bboxes, classes=read_class_names(cfg.YOLO.CLASSES)):
+  #   ped = 0
+  #   for i, bbox in enumerate(bboxes):
+  #       class_ind = int(bbox[5])
+  #       if classes[class_ind] == 'person':
+  #           ped = ped + 1 
+            
+  #   return ped 
 
     

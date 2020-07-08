@@ -11,6 +11,8 @@ import transform as tform
 import sys
 import math
 import scipy.spatial
+import markers
+
 
 ###---------------------------------------------------------------------------
 #   Allows video to be initialized using a string
@@ -23,13 +25,13 @@ import scipy.spatial
 
 def sample_select(name):        
     if name == 'aot3':
-        video_path = './data/video/AOTsample3.mp4'
+        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample3.mp4'
     elif name == 'mrb3':
-        video_path = './data/video/20190422_153844_DA4A.mkv'
+        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/20190422_153844_DA4A.mkv'
     elif name == 'aot1':
-        video_path = './data/video/AOTsample1_1.mp4'
+        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4'
     elif name == 'aot2':
-        video_path = './data/video/AOTsample2_1.mp4'
+        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample2_1.mp4'
         
     GPS_pix, pix_GPS, origin = get_transform(name)
 
@@ -46,17 +48,19 @@ def sample_select(name):
 ###
 
 def get_transform(name):
-    if name == 'aot3':
-        x, y, origin = aot_3_markers()
-        
-    elif name == 'mrb3':
-        x, y, origin = mrb3_markers()
+    if name == 'mrb3':
+        x, y, origin = markers.mrb3_markers()
         
     elif name == 'aot1':
-        x, y, origin = aot_1_markers()
+        x, y, origin = markers.aot_1_markers()
     
     elif name == 'aot2':
-        x, y, origin = aot_2_markers()
+        x, y, origin = markers.aot_2_markers()
+        
+    elif name == 'aot3':
+        x, y, origin = markers.aot_3_markers()
+    else:
+        print("Camera name invalid")
         
     GPS_pix = tform.get_best_transform(x, y)
     pix_GPS = tform.get_best_transform(y, x)
@@ -65,114 +69,7 @@ def get_transform(name):
 
 
 
-###---------------------------------------------------------------------------
-#   Contains GPS and pixel information for AOT on 21 Ave
-#
-#   returns - x - GPS location of 4 pts
-#           - y - pixel locations of corresponding 4 pts
-#           - origin - approximate camera location in GPS
 
-def aot_3_markers():
-    #get transfer function from known GPS and pixel locations
-    a = np.array([36.148342, -86.799332])   #closest lamp
-    b = np.array([36.148139, -86.799375])   #lamp across street, right
-    c = np.array([36.148349, -86.799135])   #closest left corner of furthest crosswalk dash to right
-    d = np.array([36.147740, -86.799218])   #sixth tree down the street
-    #d = np.array([36.148248, -86.799228])   #fifth turning dash
-    #a1 = np.array([36.148375, -86.799294])   #close front edge of stopping traffic line on left
-    #b1 = np.array([36.148369, -86.799229])   #far front edge of stopping traffic line on left
-    
-    e = np.array([1658, 1406])
-    f = np.array([2493, 1190])
-    g = np.array([492, 990])
-    h = np.array([2290, 970])
-    #h = np.array([1481, 1090])
-    #e1 = np.array([992, 1386])
-    #f1 = np.array([667, 1166])
-    
-    
-    x = np.array([a,b,c,d])
-    y = np.array([e,f,g,h])
-    
-    #approx camera location aot_3
-    origin = np.array([36.148432, -86.799378])
-    
-    return (x, y, origin)
-
-
-
-###---------------------------------------------------------------------------
-#   Contains GPS and pixel information for AOT on 21 Ave
-
-def aot_2_markers():
-    #get transfer function from known GPS and pixel locations
-    a = np.array([36.150310, -86.801245])   #far left corner of yellow strip before crosswalk
-    b = np.array([36.150623, -86.801172])   #front right corner of DGX
-    c = np.array([36.150479, -86.801590])   #Ruth's Chris leftmost door under tent
-    d = np.array([36.150239, -86.801372])   #front of line in sidewalk
-    
-    e = np.array([2227, 1416])
-    f = np.array([2234, 789])
-    g = np.array([362, 758])
-    h = np.array([220, 1679])
-
-    
-    
-    x = np.array([a,b,c,d])
-    y = np.array([e,f,g,h])
-    
-    #approx camera location aot_3
-    origin = np.array([36.150190, -86.801302])
-    
-    return (x, y, origin)
-
-###---------------------------------------------------------------------------
-#   Contains GPS and pixel information for AOT on 21 Ave
-
-def aot_1_markers():
-    #get transfer function from known GPS and pixel locations
-    a = np.array([36.150191, -86.801195])   #edge of brick curve closest to center
-    b = np.array([36.150494, -86.800601])   #base of sign in between cars closer to qdoba building
-    c = np.array([36.150951, -86.800553])   #corner of t-mobile store
-    d = np.array([36.150310, -86.801245])   #far left corner of yellow strip before crosswalk
-
-    e = np.array([2227, 1547])
-    f = np.array([1640, 544])
-    g = np.array([752, 524])
-    h = np.array([137, 1370])
-
-    
-    x = np.array([a,b,c,d])
-    y = np.array([e,f,g,h])
-    
-    #approx camera location aot_1
-    origin = np.array([36.150190, -86.801302])
-    
-    return (x, y, origin)
-
-
-
-###---------------------------------------------------------------------------
-#   Contains GPS and pixel information for mrb3 camera
-
-def mrb3_markers():
-    #get transfer function from known GPS and pixel locations
-    a = np.array([36.144187, -86.799707])   #far left street pole
-    b = np.array([36.143990, -86.799594])   #pole by bike sign
-    c = np.array([36.143997, -86.800180])   #corner of sidewalk
-    d = np.array([36.144203, -86.800149])   #right of sidewalk stripe closest to camera
-      
-    e = np.array([18, 1151])
-    f = np.array([462, 210])
-    g = np.array([3286, 749])
-    h = np.array([2940, 2150])
-    
-    x = np.array([a,b,c,d])
-    y = np.array([e,f,g,h])
-    
-    #approx cam location mrb 3
-    origin = np.array([36.144322, -86.800059])
-    return (x, y, origin)
 
 
 
@@ -392,7 +289,40 @@ def GPS_to_ft(pt1, pt2):
 #   during development
 ###---------------------------------------------------------------------------
 
-
+###---------------------------------------------------------------------------
+#   Returns pixel coordinate value of location left-clicked on screen 
+#   Based on:
+#   https://stackoverflow.com/questions/60066334/get-pixel-coordinates-using-mouse-in-cv2-video-frame-with-python
+def get_pixel_coord(video_path):
+    try:  
+        video_capture = cv2.VideoCapture(video_path)
+        
+        def mouseHandler(event, x, y, flags, params):
+            if event == cv2.EVENT_LBUTTONDOWN:
+                print(x, y)
+        
+        cv2.namedWindow("result", cv2.WINDOW_NORMAL)
+        cv2.setMouseCallback("result", mouseHandler)
+        
+        
+        while(True):
+        
+            # Capture frame-by-frame
+            _, frame = video_capture.read()
+        
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        
+            cv2.imshow("result", frame)
+        video_capture.release()
+        cv2.destroyAllWindows() 
+        
+    except:
+        video_capture.release()
+        cv2.destroyAllWindows() 
+        
+    
+    
 ###---------------------------------------------------------------------------
 #   Given points, draws circles around them 
 ###
@@ -467,5 +397,5 @@ def test():
         print("Unexpected error:", sys.exc_info()[0])
         vid.release()
         cv2.destroyAllWindows()
- 
+     
 #test()

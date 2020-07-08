@@ -22,7 +22,7 @@ from PIL import Image
 tf.debugging.set_log_device_placement(True)
 
 
-IMAGE_PATH = './data/kite.jpg'
+IMAGE_PATH = './data/samples/kite.jpg'
 
 
 
@@ -80,11 +80,11 @@ def main():
         pred_bbox = model.predict(image_data)
         #pred_bbox = model(image_data)
         pred_bbox = utils.postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE)
-        bboxes = utils.postprocess_boxes(pred_bbox, original_image_size, INPUT_SIZE, 0.25)
+        box_info = utils.postprocess_boxes(pred_bbox, original_image_size, INPUT_SIZE, 0.25)
+        bboxes = box_info[0]
         bboxes = utils.nms(bboxes, 0.213, method='nms')
     
         'output bbox info to file and show image'
-        utils.write_bbox_info(original_image, IMAGE_PATH, bboxes)
         image = utils.draw_bbox(original_image, bboxes)
         image = Image.fromarray(image)
         image.show()

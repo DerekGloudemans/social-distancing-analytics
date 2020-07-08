@@ -1,1 +1,0 @@
-Pedestrians: 10   Vehicles: 0   Bike: 0

@@ -39,14 +39,15 @@ def main():
     with strategy.scope():
     # if True:
         
-        #SETTINGS TO ADJUST         
+        #SETTINGS TO ADJUST-------------------------------------------     
+        
         #whether or not to save video to output file or show on screen
-        RECORD = True
+        RECORD = False
         INPUT_VID = 'aot1'
         #INPUT_VID = 'mrb3'
         #INPUT_VID
-        OUTPUT_VID= './data/vid_output/' + INPUT_VID + '.avi'
-        SHOW_VID = False
+        OUTPUT_VID= 'C:/Users/Nikki/Documents/work/inputs-outputs/vid_output/' + INPUT_VID + '.avi'
+        SHOW_VID = True
         THROWOUT_NUM = 3           #min is 1
         INPUT_SIZE = 419 #608 #230 #999 #800
         
@@ -73,7 +74,7 @@ def main():
         people_buf = buf_size * [0]
         
         #open file to output to
-        output_f = './data/txt_output/' + INPUT_VID + '.txt'
+        output_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/txt_output/' + INPUT_VID + '.txt'
         f = open(output_f, 'w')
         print('file started')
         f.write('Time\t\t\t\tPed\t<6ft\n')
@@ -151,7 +152,8 @@ def main():
                 #make bboxes
                 pred_bbox = model.predict(image_data)
                 pred_bbox = utils.postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE)
-                bboxes = utils.postprocess_boxes(pred_bbox, frame_size, INPUT_SIZE, 0.25)#.25
+                all_bboxes, probs, classes = utils.postprocess_boxes(pred_bbox, frame_size, INPUT_SIZE, 0.25)#.25
+                bboxes = utils.filter_people(all_bboxes, probs, classes)
     
                 #only continue processing if there were people identified
                 if len(bboxes) > 0:

@@ -83,7 +83,8 @@ def load_weights_v3(model, weights_file):
     assert len(wf.read()) == 0, 'failed to read all data'
     wf.close()
 
-# @tf.function
+###---------------------------------------------------------------------------
+#   Loads existing yolo weights into tf model
 
 def load_weights(model, weights_file):
     wf = open(weights_file, 'rb')
@@ -125,7 +126,7 @@ def load_weights(model, weights_file):
     assert len(wf.read()) == 0, 'failed to read all data'
     wf.close()
 
-
+ 
 def read_class_names(class_file_name):
     '''loads class name from a file'''
     names = {}
@@ -145,7 +146,9 @@ def get_anchors(anchors_path, tiny=False):
     else:
         return anchors.reshape(3, 3, 2)
 
-#@tf.function
+###---------------------------------------------------------------------------
+#   Scales photos to input size
+
 def image_preprocess(image, target_size, gt_boxes=None):
 
     ih, iw    = target_size
@@ -168,7 +171,9 @@ def image_preprocess(image, target_size, gt_boxes=None):
         gt_boxes[:, [1, 3]] = gt_boxes[:, [1, 3]] * scale + dh
         return image_paded, gt_boxes
 
-
+###---------------------------------------------------------------------------
+#   Given bbox info, draws rectangle around object
+ 
 def draw_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.CLASSES), show_label=True):
     """
     bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
@@ -259,7 +264,9 @@ def bboxes_ciou(boxes1, boxes2):
 
     return iou - ciou_term
 
-#@tf.function
+###---------------------------------------------------------------------------
+#   Filters out excessively overlapping bboxes (I think)
+   
 def nms(bboxes, iou_threshold, sigma=0.3, method='nms'):
     """
     :param bboxes: (xmin, ymin, xmax, ymax, score, class)
@@ -301,7 +308,6 @@ def diounms_sort(bboxes, iou_threshold, sigma=0.3, method='nms', beta_nms=0.6):
     best_bboxes = []
     return best_bboxes
 
-#@tf.function
 def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
     for i, pred in enumerate(pred_bbox):
         conv_shape = pred.shape
@@ -325,7 +331,10 @@ def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
     
     return pred_bbox
 
-#@tf.function
+###---------------------------------------------------------------------------
+#   Filters out bboxes that are not within the image, are not scaled properly, or are invalid
+#   Returns remaining bboxes
+   
 def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
 
     valid_scale=[0, np.inf]
@@ -374,7 +383,14 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
     #qualities of bounding boxm - trims out all bboxes that aren't within screen, properly scaled, too low of a score
     coors, scores, probs, classes = pred_coor[mask], scores[mask], pred_prob[mask], classes[mask]
     bboxes = np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
+    
+    return bboxes, probs, classes
 
+
+###---------------------------------------------------------------------------
+#   Filters out all but people and returns their bboxes
+
+def filter_people(bboxes, probs, classes):
     #list of bboxes that mark a person
     people_bboxes = []
 
@@ -390,12 +406,12 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
             bench = prob[13]
             #print(prob[9:14])
             if (light < 0.002 and fire < 0.002 and stop < 0.002 and parking < 0.002 and bench < 0.002): 
-                #(light < 0.001 and fire < 0.0005 and stop < 0.001 and parking < 0.001 and bench < 0.001):
                 people_bboxes.append(bboxes[i])
 
     people_bboxes = np.array(people_bboxes)
 
     return people_bboxes
+
 
 def freeze_all(model, frozen=True):
     model.trainable = not frozen
@@ -409,7 +425,9 @@ def unfreeze_all(model, frozen=False):
             unfreeze_all(l, frozen)
             
 
-#@tf.function
+###---------------------------------------------------------------------------
+#   Outputs oocupancy data to a txt file
+
 def video_write_info(f, bboxes, dt, count, people):
     f.write(dt)
     f.write('\t' + str(people))
@@ -417,6 +435,8 @@ def video_write_info(f, bboxes, dt, count, people):
     f.write('\n')
     
 
+###---------------------------------------------------------------------------
+#   Displays occupancy and compliance data in top right corner of video
         
 def overlay_occupancy(img, count, people, size):
     
@@ -434,6 +454,10 @@ def overlay_occupancy(img, count, people, size):
     box = cv2.getTextSize(occupants + compliance, cv2.FONT_HERSHEY_DUPLEX, 2, 3)
     offsetx = x//30 + box[0][0]
     cv2.putText(img, occupants + compliance, ((x - offsetx), (x//30)) , cv2.FONT_HERSHEY_DUPLEX, 2, (0,0,0), 3)
+
+
+###---------------------------------------------------------------------------
+#   Returns point centered at bottom of bbox
         
 def get_ftpts(bboxes):
     

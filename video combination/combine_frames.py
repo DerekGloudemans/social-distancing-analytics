@@ -32,9 +32,9 @@ paths = [
 "/media/worklab/data_HDD/cv_data/video/110_foot_pole_test/Axis_Camera_16/cam_1_capture_000.avi"
 ]
 
-paths = ['./data/vid_output/aot1.mp4', './data/vid_output/aot2.mp4']
+paths = ['C:/Users/Nikki/Documents/work/inputs-outputs/vid_output/aot1.avi', 'C:/Users/Nikki/Documents/work/inputs-outputs/vid_output/aot2.avi']
 
-file_out = "./data/vid_output/aot_combo.avi"
+file_out = "C:/Users/Nikki/Documents/work/inputs-outputs/vid_output/aot_combo.avi"
 # title_frame = "/home/worklab/Desktop/110 Traffic Camera Pole Test.jpg"
 title_frame = None
 show = False
@@ -59,7 +59,7 @@ frame_height = int(cap_list[0].get(4)*n_high /2.0)
     
 # opens VideoWriter object for saving video file if necessary
 if file_out != None:
-    out = cv2.VideoWriter(file_out,cv2.CAP_FFMPEG,cv2.VideoWriter_fourcc('D','I','V','X'), 7, (frame_width,frame_height))
+    out = cv2.VideoWriter(file_out,cv2.CAP_FFMPEG,7, (frame_width,frame_height))
 
 # add title frame for 2.5 seconds
 if title_frame != None:

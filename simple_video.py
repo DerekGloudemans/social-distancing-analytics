@@ -28,6 +28,7 @@ import sys
 import pixel_gps as pg
 #uncomment to verify that GPU is being used
 #tf.debugging.set_log_device_placement(True)
+import addresses
 
 #@tf.function
 
@@ -62,7 +63,7 @@ def main():
 
         #setup variables based on what video is being used
         video_path, GPS_pix, pix_GPS, origin = pg.sample_select(INPUT_VID)
-        
+        video_path = addresses.TEST
         #start video capture
         print("Video from: ", video_path )
         vid = cv2.VideoCapture(video_path)
@@ -171,7 +172,7 @@ def main():
                     count_buf[ind] = 0
                     people_buf[ind] = 0
                     
-                #avg people and count witihin 6ft buffers   
+                #avg people and count within 6ft buffers   
                 people = int(sum(people_buf)/len(people_buf))
                 count = int(sum(count_buf)/len(count_buf))
                 

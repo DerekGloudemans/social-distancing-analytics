@@ -9,3 +9,5 @@ core/__pycache__/config.cpython-36.pyc
 core/__pycache__/utils.cpython-36.pyc
 core/__pycache__/yolov4.cpython-36.pyc
 data/yolov4.weights
+*.pyc
+addresses.py

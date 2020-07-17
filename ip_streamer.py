@@ -10,6 +10,8 @@ import datetime
 import sys
 import multiprocessing as mp
 import time
+from ctypes import c_bool
+
 #ip streams
 #multiple video cap objsects
 
@@ -21,11 +23,12 @@ def main():
     ips = ad.AOT
     frames = [None] * len(ips)
     times = [None] * len(ips)
-    manager = mp.Manager()
+    m = mp.Manager()
+    updated = m.Value(c_bool, False)
     #lock = manager.Lock()
     #start_lock = manager.Lock()
     
-    stream_all(frames, times, ips)
+    stream_all(frames, times, ips,updated)
 
 def stream_all(frames, times, ips, updated):
     #list of ip addresses to get video from

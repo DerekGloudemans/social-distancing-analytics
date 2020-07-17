@@ -4,6 +4,7 @@ import colorsys
 import numpy as np
 import tensorflow as tf
 from core.config import cfg
+import csv
 
 def load_weights_tiny(model, weights_file):
     wf = open(weights_file, 'rb')
@@ -428,11 +429,13 @@ def unfreeze_all(model, frozen=False):
 ###---------------------------------------------------------------------------
 #   Outputs oocupancy data to a txt file
 
-def video_write_info(f, bboxes, dt, count, people):
-    f.write(dt)
-    f.write('\t' + str(people))
-    f.write('\t' + str(count))
-    f.write('\n')
+def video_write_info(f, gps_ftpts, dt, count, people):
+    # f.write(dt)
+    # f.write('\t' + str(people))
+    # f.write('\t' + str(count))
+    # f.write('\t' + np.array2string(gps_ftpts))
+    # f.write('\n')
+    f.writerow([dt, people, count, gps_ftpts])
     
 
 ###---------------------------------------------------------------------------

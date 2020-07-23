@@ -48,7 +48,6 @@ def get_info(input_vids):
 def start_model():
 
     tf.executing_eagerly()
-    print(tf.distribute.get_strategy())
 
     #TODO will have to change when working with several gpus
     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
@@ -116,8 +115,8 @@ def compliance_count(gps_ftpts):
     for gps_center in gps_ftpts:
         dist, ind = mytree.query(gps_center, k=2)
         closest = mytree.data[ind[1]]
-        dist = pg.GPS_to_ft(gps_center, closest)
-        if dist < 6:
+        #dist = pg.GPS_to_ft(gps_center, closest)
+        if dist[1] < 6:
             errors = errors + 1
     return errors    
 

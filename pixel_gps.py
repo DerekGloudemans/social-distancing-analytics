@@ -81,7 +81,6 @@ def get_transform(name):
 ###
 
 def draw_radius(frame, pts, GPS_pix, pix_GPS, origin):
-
     bounds = four_pts(pts, pix_GPS, GPS_pix, origin)
     mytree = load_tree(pts, pix_GPS)
     img, count = draw_ellipse(frame, bounds, pts, mytree, pix_GPS)
@@ -193,6 +192,7 @@ def draw_ellipse(frame, pts, centers, mytree, pix_GPS):
     gps_centers = tform.transform_pt_array(centers, pix_GPS)
     while i < pts.shape[0]:
         a = pts[i]
+        
         b = pts[i + 1]
         c = pts[i + 2]
         d = pts[i + 3]

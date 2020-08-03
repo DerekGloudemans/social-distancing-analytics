@@ -14,35 +14,6 @@ import math
 import scipy.spatial
 import markers
 
-def sample_select(name):        
-    if name == 'aot3':
-        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample3.mp4'
-    elif name == 'mrb3':
-        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/20190422_153844_DA4A.mkv'
-    elif name == 'aot1':
-        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4'
-    elif name == 'aot2':
-        video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample2_1.mp4'
-    
-
-    pix_GPS = [[-2.07813620e-01, -5.14012432e-01,  4.01979808e+02],
-                [-1.45283091e-16, -3.02228294e+00,  1.72572356e+03],
-                [ 4.24715690e-04, -7.70456596e-03,  1.00000000e+00]]
-    GPS_pix = [[ 1.63574796e+01, -4.11269628e+00,  5.22000000e+02],
-                [ 1.16697172e+00, -6.02703438e-01,  5.71000000e+02],
-                [ 2.04373330e-03, -2.89684039e-03,  1.00000000e+00]]
-    
-    
-    orig = np.array([1296, 1944])
-
-    origin = orig
-    real_origin = tform.transform_pt_array(origin, pix_GPS)
-    real_origin = np.squeeze(np.asarray(real_origin))
-    video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4'
-
-    return video_path, GPS_pix, pix_GPS, real_origin
-        
-
 
 ###---------------------------------------------------------------------------
 #   Given photo points at people's feet, draws '6 foot' ellipse around them.
@@ -55,8 +26,8 @@ def draw_radius(frame, pix_pts, real_pix, pix_real, real_origin):
     bounds, frame = four_pts(pix_pts, pix_real, real_pix, real_origin, frame)
     mytree = load_tree(pix_pts, pix_real)
     img, count = draw_ellipse(frame, bounds, pix_pts, mytree, pix_real)
-    bird_img = overhead(pix_pts, real_origin, pix_real)
-    return img, bird_img, count
+    # bird_img = overhead(pix_pts, real_origin, pix_real)
+    return img, count
 
 
 
@@ -85,18 +56,20 @@ def four_pts(pix_pts, pix_real, real_pix, real_origin, img):
     final = np.squeeze(np.asarray(final))
     #check if final has any elements?
     #convert to pixel coords
-    pt = final[5]
-    pt2 = final[7]
+    # pt = final[5]
+    # pt2 = final[7]
 
-    dist = math.sqrt((pt2[0] - pt[0])**2 + (pt2[1] - pt[1])**2)
+    # dist = math.sqrt((pt2[0] - pt[0])**2 + (pt2[1] - pt[1])**2)
     # print(dist)
     
     
     final = tform.transform_pt_array(final, real_pix)
-    for pt in final:
+    
+    #show edge circles or not
+    # for pt in final:
         
-        pt2 = (int(pt[0]), int(pt[1]))
-        cv2.circle(img, pt2, 10, (0,0,255), -1, 8)
+    #     pt2 = (int(pt[0]), int(pt[1]))
+    #     cv2.circle(img, pt2, 10, (0,0,255), -1, 8)
 
     
     
@@ -175,6 +148,7 @@ def load_tree(pix_pts, pix_real):
 
 
 
+
 ###---------------------------------------------------------------------------
 #   Given array of defining points of several ellipses (endpoints of axes) and 
 #   corresponding center points, draws ellipses on given image
@@ -204,8 +178,9 @@ def draw_ellipse(frame, pts, centers, mytree, pix_real):
         b = pts[i + 1]
         c = pts[i + 2]
         d = pts[i + 3]
-        possible_minor = int((math.sqrt(math.pow((c[0]-a[0]), 2) + math.pow((c[1]-a[1]), 2)))/2)
-        # possible_minor = int(abs(c[1]-a[1])/2)
+        # this has performed worse on all samples except maybe aot2
+        # possible_minor = int((math.sqrt(math.pow((c[0]-a[0]), 2) + math.pow((c[1]-a[1]), 2)))/2)
+        possible_minor = int(abs(c[1]-a[1])/2)
         possible_major = int((math.sqrt(math.pow((d[0]-b[0]), 2) + math.pow((d[1]-b[1]), 2)))/2)
         
         minor = min([possible_major, possible_minor])
@@ -218,6 +193,7 @@ def draw_ellipse(frame, pts, centers, mytree, pix_real):
         x = int(center[0])
         y = int(center[1])
         
+        # TODO could probably query all points simultaneously, could be a little more efficient
         if centers.size > 2:
             gps_center = gps_centers[i//4]
             dist, ind = mytree.query(gps_center, k=2)
@@ -246,6 +222,8 @@ def draw_ellipse(frame, pts, centers, mytree, pix_real):
             cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0,255,0), thickness, line_type)
         i = i + 4
         ct = ct + 1
+        
+
     #combine original image and ellipse image into one
     all_img = cv2.addWeighted(ellipses, alpha, frame, 1-alpha, 0)
     return all_img, count
@@ -538,3 +516,14 @@ def test():
         cv2.destroyAllWindows()
      
 #test()
+
+# pt1 = np.array([36.150319, -86.801259])
+# pt2 = np.array([36.150258, -86.801385])
+# pt3 = np.array([36.150490, -86.801388])
+# pt4 = np.array([36.150427, -86.801514])
+
+
+# print('width ' + str(GPS_to_ft(pt1, pt2)))
+# print('width ' + str(GPS_to_ft(pt3, pt4)))
+# print('height ' + str(GPS_to_ft(pt1, pt3)))
+# print('height ' + str(GPS_to_ft(pt2, pt4)))

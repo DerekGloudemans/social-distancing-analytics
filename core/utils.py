@@ -310,7 +310,10 @@ def diounms_sort(bboxes, iou_threshold, sigma=0.3, method='nms', beta_nms=0.6):
     return best_bboxes
 
 def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
+    # print(len(pred_bbox))
+
     for i, pred in enumerate(pred_bbox):
+        # print(pred.shape)
         conv_shape = pred.shape
         output_size = conv_shape[1]
         conv_raw_dxdy = pred[:, :, :, :, 0:2]
@@ -321,15 +324,18 @@ def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
         xy_grid = np.tile(tf.expand_dims(xy_grid, axis=0), [1, 1, 1, 3, 1])
         xy_grid = xy_grid.astype(np.float)
 
+        # print(xy_grid.shape)
         # pred_xy = (tf.sigmoid(conv_raw_dxdy) + xy_grid) * STRIDES[i]
         pred_xy = ((tf.sigmoid(conv_raw_dxdy) * XYSCALE[i]) - 0.5 * (XYSCALE[i] - 1) + xy_grid) * STRIDES[i]
         # pred_wh = (tf.exp(conv_raw_dwdh) * ANCHORS[i]) * STRIDES[i]
         pred_wh = (tf.exp(conv_raw_dwdh) * ANCHORS[i])
         pred[:, :, :, :, 0:4] = tf.concat([pred_xy, pred_wh], axis=-1)
+        # print(pred.shape)
 
     pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
+    # print(np.array(pred_bbox).shape)
     pred_bbox = tf.concat(pred_bbox, axis=0)
-    
+    # print(np.array(pred_bbox).shape)
     return pred_bbox
 
 ###---------------------------------------------------------------------------
@@ -337,17 +343,30 @@ def postprocess_bbbox(pred_bbox, ANCHORS, STRIDES, XYSCALE=[1,1,1]):
 #   Returns remaining bboxes
    
 def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
+    
 
     valid_scale=[0, np.inf]
     
+    #append batch # to end
+    
+    # size = pred_bbox.shape[0]
+    # a = np.array([[0]] * size)
+    # print(a.shape)
     #convert to numpy array
     pred_bbox = np.array(pred_bbox)
+    # pred_bbox = np.append(pred_bbox, a, axis = 1)
+    # print(pred_bbox.shape)
+    # pred_bbox[10648:, -1] = 1
+    # print(pred_bbox.shape)
+    
 
     #separate out box dimensions nd and probability
     pred_xywh = pred_bbox[:, 0:4]
     pred_conf = pred_bbox[:, 4]
     pred_prob = pred_bbox[:, 5:]
-
+    
+    # image_nums = pred_bbox[:, -1]
+    
     #find corners of bboxes and scale properly
     # # (1) (x, y, w, h) --> (xmin, ymin, xmax, ymax)
     pred_coor = np.concatenate([pred_xywh[:, :2] - pred_xywh[:, 2:] * 0.5,
@@ -382,18 +401,19 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
     mask = np.logical_and(scale_mask, score_mask)
     
     #qualities of bounding boxm - trims out all bboxes that aren't within screen, properly scaled, too low of a score
-    coors, scores, probs, classes = pred_coor[mask], scores[mask], pred_prob[mask], classes[mask]
+    coors, scores, probs, classes = pred_coor[mask], scores[mask], pred_prob[mask], classes[mask] #, image_nums[mask]
     bboxes = np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
     
-    return bboxes, probs, classes
+    return bboxes, probs, classes #, image_nums
 
 
 ###---------------------------------------------------------------------------
 #   Filters out all but people and returns their bboxes
 
-def filter_people(bboxes, probs, classes):
+def filter_people(bboxes, probs, classes):#, image_num):
     #list of bboxes that mark a person
     people_bboxes = []
+    # people_bboxes2 = []
 
     # takes objects primarily identified as a person and filters out ones with relatively high chances
     # of being non-human
@@ -408,10 +428,15 @@ def filter_people(bboxes, probs, classes):
             #print(prob[9:14])
             if (light < 0.002 and fire < 0.002 and stop < 0.002 and parking < 0.002 and bench < 0.002): 
                 people_bboxes.append(bboxes[i])
+                # if image_num[i] == 0:
+                #     people_bboxes.append(bboxes[i])
+                # elif image_num[i] ==1:
+                #     people_bboxes2.append(bboxes[i])
 
     people_bboxes = np.array(people_bboxes)
+    # people_bboxes2 = np.array(people_bboxes2)
 
-    return people_bboxes
+    return people_bboxes #, people_bboxes2
 
 
 def freeze_all(model, frozen=True):
@@ -429,13 +454,9 @@ def unfreeze_all(model, frozen=False):
 ###---------------------------------------------------------------------------
 #   Outputs oocupancy data to a txt file
 
-def video_write_info(f, gps_ftpts, dt, count, people):
-    # f.write(dt)
-    # f.write('\t' + str(people))
-    # f.write('\t' + str(count))
-    # f.write('\t' + np.array2string(gps_ftpts))
-    # f.write('\n')
-    f.writerow([dt, people, count, gps_ftpts])
+def video_write_info(f, real_ftpts, dt, count, people, avg_dist):
+    pts = real_ftpts.tolist()
+    f.writerow([dt, people, count, avg_dist, pts])
     
 
 ###---------------------------------------------------------------------------

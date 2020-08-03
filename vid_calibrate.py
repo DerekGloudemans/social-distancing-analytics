@@ -21,20 +21,32 @@ import os.path
 def main():
 
     video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4'
-    video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/vid_short.mp4'
+    video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample2_1.mp4'
+    # video_path = 'rtsp://root:worklab@192.168.86.246/axis-media/media.amp?framerate=30.0?streamprofile=vlc' #hall
+    # video_path = 'rtsp://root:worklab@192.168.86.247/axis-media/media.amp?framerate=30.0?streamprofile=vlc' #living room
+
+    # video_path = 'C:/Users/Nikki/Documents/work/inputs-outputs/video/vid_short.mp4'
 
     output_file = 'C:/Users/Nikki/Documents/work/inputs-outputs/transforms.csv'
     
     #whether to include surroundings, or just the space between the four selected points
     roi_only = True 
     
-    #width and length of measured area, in feet
+    # #width and length of measured area, in feet aot 1
     # length = 125.37564416986191
     # wth = 91.52952303334027
+  
+    # #width and length of measured area, in feet aot 2
+    # length = 72.6
+    # wth = 43.4
+
+    # living room
+    length = 11.18
+    wth = 15.64
     
-    length = 144
-    wth = 76.8
-    
+    # #hall
+    # length = 19.71
+    # wth = 3.375
     
     #enter points top left, top right, bottom left bottom right, 2 * 6 ft apart - should be rectangle
     #furthest locations away and closest locations to camera that someone could be standing
@@ -43,6 +55,11 @@ def main():
     #find transfromation matrices
     pix_real, real_pix = find_transform(parallel, corners, wth, length, roi_only)
     
+    # pix_real = np.array2string(pix_real, separator = ',')
+    # real_pix = np.array2string(real_pix, separator = ',')
+    pix_real = pix_real.tolist()
+    real_pix = real_pix.tolist()
+   
     #if file doesn't exist, create it. Otherwise, append to it
     try:
         if not os.path.isfile(output_file):
@@ -90,9 +107,32 @@ def find_all_pts(video_path, roi_only = True):
         
         global allpts
         allpts = []
-        
-        # Capture frame-by-frame
         _, frame = video_capture.read()
+        # use = False
+        
+        # cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
+
+        # # Allow user to regrab frame if previous frame was not acceptable
+        # while not use:
+            
+        #     try:
+                
+        #         key = input('Get new frame (y/n)?')
+        #         if key == 'y':
+        #             video_capture.grab()
+        #             _, frame = video_capture.retrieve()
+                    
+                    
+        #         elif key == 'n':
+        #             use = True
+        #         else:
+        #             print('Invalid option')
+        #         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+        #         cv2.imshow("Calibration", frame)
+        #         if cv2.waitKey(1) & 0xFF == ord('q'): break
+        #     except:
+        #         break
         
         frame_size = frame.shape[:2]
         corners = [[0,0], [frame_size[1], 0], [frame_size[1],frame_size[0]], [0, frame_size[0]]]

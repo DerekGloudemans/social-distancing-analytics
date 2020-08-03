@@ -7,21 +7,21 @@ Created on Mon Jul 13 13:25:10 2020
 
 import importlib
 import multiprocessing as mp
-import addresses
+# import addresses
 import ip_streamer
 import cv2
 import sys
-import datetime
+# import datetime
 import numpy as np
 import time
 from ctypes import c_bool
 import scipy.spatial
 
-import tensorflow as tf
-from core.yolov4 import YOLOv4, decode #, YOLOv3_tiny, YOLOv3
+# import tensorflow as tf
+# from core.yolov4 import YOLOv4, decode #, YOLOv3_tiny, YOLOv3
 from core import utils
-from core.config import cfg
-from PIL import Image
+# from core.config import cfg
+# from PIL import Image
 import pixel_realworld as pr
 import detector
 import transform as tform
@@ -43,30 +43,34 @@ def main():
     # ips = ['C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4','C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample2_1.mp4' ]
     ips = []
     vids = []
-    
     # file containing camera information
     transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/transforms.csv'
     transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/test.csv'
     transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/aot_transforms_better.csv'
-    q_size = 3
     
     manager = mp.Manager()
-
     #create VidObjs to store information about each camera
-    initialize_cams(transform_f, ips, vids, manager)
+    initialize_cams(transform_f, ips, vids)
 
     #  create manager to handle shared variables across processes
     updated = manager.Value(c_bool, False)
 
-    buf_len = len(vids)
-    frames = manager.list([None]* buf_len)
-    times = manager.list([None]* buf_len)
+    num_cams = len(vids)
+    frames = manager.list([None]* num_cams)
+    times = manager.list([None]* num_cams)
+    avgs = manager.list([None] * 3)
+
     
-        
+    #list of queues, one queue per camera, that contain lists of output data (occupants, errors, avg dist)
+    all_output_stats = []
+    #length of queues, kinda arbitrary - this is the number that will be used for moving avg analytics
+    buf_num = 3
+    for i in range(num_cams):
+        all_output_stats.append(mp.Queue(buf_num))        
     
     
     #stores frame data that has been transfered to GPU
-    gpu_frames = [None]* buf_len        
+    gpu_frames = [None]* num_cams        
 
     #start model
     model = detector.start_model()
@@ -77,7 +81,7 @@ def main():
         streamer.start()
         print('Separate process started')
         
-        analysis = mp.Process(target=adat.main, args=(vids)) 
+        analysis = mp.Process(target=adat.main, args=(all_output_stats, buf_num, avgs)) 
         analysis.start()
         print('Separate process started')
         
@@ -136,19 +140,28 @@ def main():
                     #output info to csv file  
                     utils.video_write_info(vid.csvfile, realpts, str(dt), errors, occupants, avg_dist)
                     
-                    stats = errors, occupants, avg_dist
-                    if vid.out_q.full():
-                        vid.out_q.get()
-                    vid.out_q.put(stats)
+                    stats = [errors, occupants, avg_dist]
                     
+                    #put outpt data into queue so it is accessible by the analyzer
+                    # print(list(all_output_stats))
+                    # print(repr(all_output_stats))
+                    # print(list(all_output_stats[i]))
+                    
+                    if all_output_stats[i].full():
+                        a = all_output_stats[i].get()
+                        print(a)
+                    all_output_stats[i].put(stats)
+                    
+            
+                    print(avgs)
                     #save frames
                     if vid.frame_save:
                         outpt_frame(ftpts, frame, vid, errors, occupants, bboxes)
                         
-                    # # FIXME - just for debugging, show frame on screen
-                    # if i == 0 or i == 1:
-                    #     show_frame(ftpts, frame, vid, errors, occupants, bboxes, i)  
-                    #     if cv2.waitKey(1) & 0xFF == ord('q'): break
+                    # FIXME - just for debugging, show frame on screen
+                    if i == 0 or i == 1:
+                        show_frame(ftpts, frame, vid, errors, occupants, bboxes, i)  
+                        if cv2.waitKey(1) & 0xFF == ord('q'): break
            
     except:
         print("Unexpected error:", sys.exc_info())
@@ -209,7 +222,7 @@ def save_files(vids):
 ###---------------------------------------------------------------------------
 #   Creates VidObjs from addresses listed in csvfile
    
-def initialize_cams(transform_f, ips, vids, manager):
+def initialize_cams(transform_f, ips, vids):
     with open(transform_f, newline='') as csvfile:
         reader = csv.reader(csvfile)
         for i, row in enumerate(reader):
@@ -237,8 +250,7 @@ def initialize_cams(transform_f, ips, vids, manager):
                 else:
                     print('Invalid camera name')
                 
-                
-                vids.append(VidObj(name, pix_real, real_pix, manager)) #True))
+                vids.append(VidObj(name, pix_real, real_pix)) #True))
                 print()
                 
             except:
@@ -250,7 +262,7 @@ def initialize_cams(transform_f, ips, vids, manager):
 
 class VidObj:
     
-    def __init__(self, name, pix_real, real_pix, manager, save = False):
+    def __init__(self, name, pix_real, real_pix, save = False):
         #name of output file
         self.filename = 'C:/Users/Nikki/Documents/work/inputs-outputs/txt_output/' + name + '.csv'
         
@@ -270,9 +282,7 @@ class VidObj:
         #set output directory and frame number in case video is to be saved
         self.frame_dir = 'C:/Users/Nikki/Documents/work/inputs-outputs/vid_output/' + name + '_frames/'
         self.count = 0  
-        
-        self.out_q = manager.Queue(3)
-        
+                
         print('Saving frames: ', self.frame_save)
         
         

@@ -54,19 +54,21 @@ def main():
 
     #  create manager to handle shared variables across processes
     updated = manager.Value(c_bool, False)
+    removed = manager.Value(c_bool, False)
 
     num_cams = len(vids)
     frames = manager.list([None]* num_cams)
     times = manager.list([None]* num_cams)
-    avgs = manager.list([None] * 3)
-
+    avgs = manager.list([None] * 5)
+    avg_lock = manager.Lock()
+    out_q = manager.Queue(num_cams*2)
     
     #list of queues, one queue per camera, that contain lists of output data (occupants, errors, avg dist)
     all_output_stats = []
     #length of queues, kinda arbitrary - this is the number that will be used for moving avg analytics
     buf_num = 3
-    for i in range(num_cams):
-        all_output_stats.append(mp.Queue(buf_num))        
+    # for i in range(num_cams):
+    #     all_output_stats.append(mp.Queue(buf_num))        
     
     
     #stores frame data that has been transfered to GPU
@@ -81,7 +83,8 @@ def main():
         streamer.start()
         print('Separate process started')
         
-        analysis = mp.Process(target=adat.main, args=(all_output_stats, buf_num, avgs)) 
+        # analysis = mp.Process(target=adat.main, args=(all_output_stats, buf_num, avgs, removed))
+        analysis = mp.Process(target=adat.main, args=(out_q, buf_num, num_cams, avgs, avg_lock)) 
         analysis.start()
         print('Separate process started')
         
@@ -140,20 +143,27 @@ def main():
                     #output info to csv file  
                     utils.video_write_info(vid.csvfile, realpts, str(dt), errors, occupants, avg_dist)
                     
-                    stats = [errors, occupants, avg_dist]
+                    stats = [i, errors, occupants, avg_dist]
                     
                     #put outpt data into queue so it is accessible by the analyzer
                     # print(list(all_output_stats))
                     # print(repr(all_output_stats))
                     # print(list(all_output_stats[i]))
+                    if out_q.full():
+                        a = out_q.get()
+                        print("Leaving queue: ", a)
+                    out_q.put(stats)
+                    # if all_output_stats[i].full():
+                    #     a = all_output_stats[i].get()
+                    #     removed.value = True
+                    #     print("Leaving queue: ", a)
+                    # else:
+                    #     removed.value = False
+                    # all_output_stats[i].put(stats)
                     
-                    if all_output_stats[i].full():
-                        a = all_output_stats[i].get()
-                        print(a)
-                    all_output_stats[i].put(stats)
-                    
-            
-                    print(avgs)
+                    avg_lock.acquire()
+                    print("Avgs: ", avgs)
+                    avg_lock.release()
                     #save frames
                     if vid.frame_save:
                         outpt_frame(ftpts, frame, vid, errors, occupants, bboxes)

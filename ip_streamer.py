@@ -20,81 +20,81 @@ from ctypes import c_bool
 #make separate processes
 #need to check that frame grabbed exists and hasn't already been processed
 def main():
-    ips = ad.AOT
-    frames = [None] * len(ips)
-    times = [None] * len(ips)
+    ips = ['C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4','C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample2_1.mp4']
     m = mp.Manager()
     updated = m.Value(c_bool, False)
+    frames = m.list([None] * len(ips))
+    times = m.list([None] * len(ips))
+
     #lock = manager.Lock()
     #start_lock = manager.Lock()
-    
-    stream_all(frames, times, ips,updated)
+    streamers = []
+    try:
+        for i, ip in enumerate(ips):
+            streamers.append(mp.Process(target=stream_all, args=(frames, times, ip, updated, i)))
+        for streamer in streamers:
+            streamer.start()
+            
+        while updated.value == False:
+            continue
+        
+        while True:
+            for i in range(len(ips)):
+                cv2.namedWindow("result" + str(i), cv2.WINDOW_NORMAL)
+                cv2.imshow("result" + str(i), frames[i])
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
+    except:
+        print('Unexpected error: ', sys.exc_info())
+        for streamer in streamers:
+            streamer.terminate()
+        cv2.destroyAllWindows()
 
-def stream_all(frames, times, ips, updated):
+
+def stream_all(frames, times, ip, updated, i):
     #list of ip addresses to get video from
-    streams = open_cap(ips)
+    stream = open_cap(ip)
     # frames = [None] * len(ips)
     # times = [None] * len(ips)
-    print('here')
-    frames, times = get_cap(streams, frames, times)
+    print(frames[i])
+    print(times[i])
+    print(stream)
+    get_cap(stream, frames, times, i)
+
     updated.value = True
     try:
         while(True):
-            # prev_time = time.time()
-
-            #print('Check 1: ', times[0])
-            
-            frames, times = get_cap(streams, frames, times)
+            get_cap(stream, frames, times, i)
             updated.value = True
-            # frames = [0,0,3]
-            # times = [0,1,2]
-            # frames = a
-            # times = b
-            
-
-            # c_frames.send(frames)
-            # c_times.send(times)
-            # for i, frame in enumerate(frames):
-            #     cv2.namedWindow("result" + str(i), cv2.WINDOW_NORMAL)
-            #     cv2.imshow("result" + str(i), frame)
+           
+        
+            # cv2.namedWindow("result" + str(i), cv2.WINDOW_NORMAL)
+            # cv2.imshow("result" + str(i), frames[i])
             # if cv2.waitKey(1) & 0xFF == ord('q'): break
-            # curr_time = time.time()
-            # exec_time = curr_time - prev_time
-            # info = "time: %.2f ms" %(1000*exec_time/len(ips))
-            # print(info)
     except:
         print("Unexpected error:", sys.exc_info()[0])
-        close_cap(streams)
+        close_cap(stream)
         cv2.destroyAllWindows()
+        streamer.terminate()
     return
     
 #opens video capture objects for all input streams  
-def open_cap(ips):
-    streams = [None] * len(ips)
-    for i, ip in enumerate(ips):
-        print("Video from: ", ip)
-        streams[i] = cv2.VideoCapture(ip)
-    print ("Captures opened")
-    return streams
+def open_cap(ip):
+    print("Video from: ", ip)
+    stream = cv2.VideoCapture(ip)
+    print ("Capture opened")
+    return stream
 
 #gets the next frame from each video capture object
 #at some point should read this directly into shared memory
-def get_cap(streams, frames, times):
-    for i, stream in enumerate(streams):
-        times[i] = datetime.datetime.now()
-        ret_val, frames[i] = stream.read()
-    #print('Check 2: ', times[0])    
-    return frames, times
+def get_cap(stream, frames, times, i):
+    times[i] = datetime.datetime.now()
+    ret_val, frames[i] = stream.read()
 
 #closes all video capture objects
-def close_cap(streams):
-    for i, stream in enumerate(streams):
-        stream.release()
+def close_cap(stream):
+    stream.release()
     print ("Captures closed")
 
-def sample(num):
-    print(num)
-    return
 
 if __name__ == "__main__":
     main()

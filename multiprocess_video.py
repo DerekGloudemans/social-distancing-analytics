@@ -26,11 +26,6 @@ import analyze_data as adat
 
 
 
-######## FIXMEEEE - analyze data needs a way to access shared variable, must make q more easily shareable
-########
-########
-########
-########
 
 
 def main():
@@ -82,19 +77,26 @@ def main():
     #stores frame data that has been transfered to GPU
     gpu_frames = [None]* num_cams     
     
-    #start model
-    model = detector.start_model()
+    workers = setup_gpus(gpu_list=[0])
+    print(workers)
     
+    
+    #start model
+    # model = detector.start_model()
+    streamers = []
+
     try:
         #grab video frames in separate process
-        streamer = mp.Process(target=ip_streamer.stream_all, args=(frames, times, ips, updated)) 
-        streamer.start()
-        print('Separate process started')
+        for i, ip in enumerate(ips):
+            streamer = streamers.append(mp.Process(target=ip_streamer.stream_all, args=(frames, times, ip, updated, i)))
+        for streamer in streamers:
+            streamer.start()
+            print('Streamer process started')
         
         # analysis = mp.Process(target=adat.main, args=(all_output_stats, buf_num, avgs, removed))
         analysis = mp.Process(target=adat.main, args=(out_q, buf_num, num_cams, avgs, avg_lock, errs, ocpts, dists)) 
         analysis.start()
-        print('Separate process started')
+        print('Analysis process started')
         
         #wait until frames are starting to be read
         while(not updated.value):   
@@ -102,9 +104,10 @@ def main():
         
         #find and assign the frame size of each stream
         #TODO may have to resize frames or something for running through the model in batches
+        print('here')
         for i, vid in enumerate(vids):
             vid.set_size(frames[i].shape[:2])
-            
+        print('here2')    
         prev_time = time.time()
         
         #continuously loop until keyboard interrupt
@@ -125,14 +128,14 @@ def main():
                     
                 #loop through frames and move to GPU (TODO - enable batching)
                 for i, frame in enumerate(frames):
-                    gpu_frames[i] = detector.frame_to_gpu(frame)
+                    gpu_frames[i] = detector.frame_to_gpu(frame, workers[0].gpu)
             
                 #loop through frames, find people, record occupants and infractions  
                 for i, vid in enumerate(vids): 
                     frame = frames[i]
                     gpu_frame = gpu_frames[i]
                     dt = times[i]
-                    bboxes = detector.person_bboxes(model, gpu_frame, vid.frame_size)
+                    bboxes = detector.person_bboxes(workers[0].model, gpu_frame, vid.frame_size)
                     
                     #find ft pts and convert to real_world
                     ftpts = utils.get_ftpts(bboxes)
@@ -183,7 +186,8 @@ def main():
         cv2.destroyAllWindows()
         for vid in vids:
             vid.base_f.close()
-        streamer.terminate()
+        for streamer in streamers:
+            streamer.terminate()
         analysis.terminate()
 
 
@@ -271,7 +275,49 @@ def initialize_cams(transform_f, ips, vids):
             except:
                 print('Cam ' + str(i + 1) + ' FAILED initialization')
                 print()
-                
+###---------------------------------------------------------------------------
+#       
+
+def setup_gpus(num = 0,  gpu_list = []):
+    workers = []
+   
+    #load gpus from a list of numbers
+    for a in gpu_list:
+        workers.append(worker(a))
+        
+    #or load gpus starting at zero to a number
+    for i in range(num):
+        workers.append(worker(i))
+        
+    return workers
+    #set up a model on each gpu
+    #return a list of gpu workers
+###---------------------------------------------------------------------------
+#  
+
+class worker():
+    def __init__(self,i):
+        #whether gpu is available
+        self.avail = True
+        
+        #what gpu this worker is on
+        self.gpu = "/gpu:" + str(i)
+        
+        #sets up a model on this gpu to predict with
+        self.model = detector.start_model(self.gpu)
+    
+    def mark_avail(self):
+        self.avail = True
+        
+    def mark_unavail(self):
+        self.avail = False
+        
+    def set_frame(self, frame):
+        self.cur_frame = frame
+        
+        
+
+               
 ###---------------------------------------------------------------------------
 #       
 

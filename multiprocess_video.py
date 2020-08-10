@@ -7,29 +7,24 @@ Created on Mon Jul 13 13:25:10 2020
 
 import importlib
 import multiprocessing as mp
-# import addresses
 import ip_streamer
 import cv2
 import sys
-# import datetime
 import numpy as np
 import time
 from ctypes import c_bool
 import scipy.spatial
 
-# import tensorflow as tf
-# from core.yolov4 import YOLOv4, decode #, YOLOv3_tiny, YOLOv3
+import tensorflow as tf
 from core import utils
-# from core.config import cfg
-# from PIL import Image
 import pixel_realworld as pr
 import detector
 import transform as tform
 import csv
 import ast
 import analyze_data as adat
-#uncomment to verify that GPU is being used
-#tf.debugging.set_log_device_placement(True)
+
+
 
 ######## FIXMEEEE - analyze data needs a way to access shared variable, must make q more easily shareable
 ########
@@ -39,44 +34,57 @@ import analyze_data as adat
 
 
 def main():
+    #uncomment to verify that GPU is being used
+    tf.debugging.set_log_device_placement(False)
     importlib.reload(mp)
-    # ips = ['C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4','C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample2_1.mp4' ]
+
     ips = []
     vids = []
+    
     # file containing camera information
     transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/transforms.csv'
     transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/test.csv'
+    transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/test_all.csv'
     transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/aot_transforms_better.csv'
     
     manager = mp.Manager()
+    
     #create VidObjs to store information about each camera
     initialize_cams(transform_f, ips, vids)
-
+    
+    num_cams = len(vids)
+    #length of queues, kinda arbitrary - this is the number that will be used for moving avg analytics
+    buf_num = 3
+    
+    
+    
     #  create manager to handle shared variables across processes
     updated = manager.Value(c_bool, False)
-    removed = manager.Value(c_bool, False)
-
-    num_cams = len(vids)
     frames = manager.list([None]* num_cams)
     times = manager.list([None]* num_cams)
     avgs = manager.list([None] * 5)
     avg_lock = manager.Lock()
     out_q = manager.Queue(num_cams*2)
     
-    #list of queues, one queue per camera, that contain lists of output data (occupants, errors, avg dist)
-    all_output_stats = []
-    #length of queues, kinda arbitrary - this is the number that will be used for moving avg analytics
-    buf_num = 3
-    # for i in range(num_cams):
-    #     all_output_stats.append(mp.Queue(buf_num))        
+    errs = manager.list()
+    ocpts = manager.list()
+    # for _ in range(num_cams):
+    #     ocpts.append( [None]* buf_num)
+    dists = manager.list()
+    e_lock = manager.Lock()
     
-    
-    #stores frame data that has been transfered to GPU
-    gpu_frames = [None]* num_cams        
+    for i in range(num_cams):
+        errs.append(manager.list([None]))
+        ocpts.append(manager.list([None]))
+        dists.append(manager.list([None]))
 
+
+    #stores frame data that has been transfered to GPU
+    gpu_frames = [None]* num_cams     
+    
     #start model
     model = detector.start_model()
-
+    
     try:
         #grab video frames in separate process
         streamer = mp.Process(target=ip_streamer.stream_all, args=(frames, times, ips, updated)) 
@@ -84,7 +92,7 @@ def main():
         print('Separate process started')
         
         # analysis = mp.Process(target=adat.main, args=(all_output_stats, buf_num, avgs, removed))
-        analysis = mp.Process(target=adat.main, args=(out_q, buf_num, num_cams, avgs, avg_lock)) 
+        analysis = mp.Process(target=adat.main, args=(out_q, buf_num, num_cams, avgs, avg_lock, errs, ocpts, dists)) 
         analysis.start()
         print('Separate process started')
         
@@ -146,32 +154,29 @@ def main():
                     stats = [i, errors, occupants, avg_dist]
                     
                     #put outpt data into queue so it is accessible by the analyzer
-                    # print(list(all_output_stats))
-                    # print(repr(all_output_stats))
-                    # print(list(all_output_stats[i]))
                     if out_q.full():
                         a = out_q.get()
                         print("Leaving queue: ", a)
                     out_q.put(stats)
-                    # if all_output_stats[i].full():
-                    #     a = all_output_stats[i].get()
-                    #     removed.value = True
-                    #     print("Leaving queue: ", a)
-                    # else:
-                    #     removed.value = False
-                    # all_output_stats[i].put(stats)
+                                       
+                    # avg_lock.acquire()
+                    # print("Avgs: ", avgs)
+                    # avg_lock.release()
+                    print(adat.get_o_avg(ocpts, i))
+                    print(adat.get_e_avg(errs, i))
+                    # print(avgs[0])
+                    print(adat.get_dist_avg(dists, i))
+                    # print(str(ocpts[i]))
+                    # if len(ocpts) > 1:
+                    #     print(adat.get_o_avg(ocpts, i))
                     
-                    avg_lock.acquire()
-                    print("Avgs: ", avgs)
-                    avg_lock.release()
                     #save frames
                     if vid.frame_save:
                         outpt_frame(ftpts, frame, vid, errors, occupants, bboxes)
                         
                     # FIXME - just for debugging, show frame on screen
-                    if i == 0 or i == 1:
-                        show_frame(ftpts, frame, vid, errors, occupants, bboxes, i)  
-                        if cv2.waitKey(1) & 0xFF == ord('q'): break
+                    show_frame(ftpts, frame, vid, errors, occupants, bboxes, i)  
+                    if cv2.waitKey(1) & 0xFF == ord('q'): break
            
     except:
         print("Unexpected error:", sys.exc_info())

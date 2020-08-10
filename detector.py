@@ -51,6 +51,8 @@ def start_model():
 
     #TODO will have to change when working with several gpus
     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
+   
+    # strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
 
         #generate model

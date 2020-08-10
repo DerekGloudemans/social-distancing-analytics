@@ -9,23 +9,24 @@ Created on Fri Jul 31 10:35:56 2020
 # 3 website displays live individual camera and live aggregate data
 # 4 website shows most recent frames
 # 5 website shows moving averages + such for hr, day, week
-import time
+# 6 website shows graphs and such
 import sys
 import math
-# 6 website shows graphs and such
 
-
-####FIXME averages are incorrect, WHYYYYY?????
-def main(out_q, buf_num ,num_cams, avgs, avg_lock):
+#TODO I think averages are correct, could be good to double check
+def main(out_q, buf_num ,num_cams, avgs, avg_lock, errs, ocpts, dists):
     # all_out = [[[None]*3]* buf_num] * num_cams
-    errors = [[None]* buf_num for _ in range(num_cams)]
-    occupants = [[None]* buf_num for _ in range(num_cams)]
-    avg_dists = [[None]* buf_num for _ in range(num_cams)]
+    # errs = [[None]* buf_num for _ in range(num_cams)]
+    # # ocpts = [[None]* buf_num for _ in range(num_cams)]
+    # dists = [[None]* buf_num for _ in range(num_cams)]
+    # for i in range(num_cams):
+    #     errs.append(manager.list([]))
+    #     ocpts.append(manager.list([]))
+    #     dists.append(manager.list([]))
     index = 0
     rollover = 0
-    total = 0
+    last = buf_num * -1
     #not sure that a is cycling through the buffers in the best way
-    # time.sleep(10)
     try:
         while(True):
             #location of oldest entry in mega list
@@ -38,59 +39,57 @@ def main(out_q, buf_num ,num_cams, avgs, avg_lock):
                 i = data[0]
                
                 #updates camera buffer at oldest index
-                errors[i][index] = data[1]
-                occupants[i][index] = data[2]
-                avg_dists[i][index] = data[3]
+                errs[i].append(data[1])
+                ocpts[i].append(data[2])
+                dists[i].append(data[3])
+
                 
+                while len(errs[i]) > buf_num:
+                    errs[i].pop(0)
                 
-                # temp = filter(None, errors)
-                # num = len(temp)
-                # error_avg = sum(temp)/num
-                error_avg = math.ceil(calc_avg(errors[i]))
-                occupant_avg = math.ceil(calc_avg(occupants[i]))
-                dist_avg = round(calc_avg(avg_dists[i]), 2)
+                while len(ocpts[i]) > buf_num:
+                    ocpts[i].pop(0)
+                    
+                while len(dists[i]) > buf_num:
+                    dists[i].pop(0)
                 
                 #this section just for debugging
-                avg_lock.acquire()
-                avgs[0] = i
-                avgs[1] = index
+                # avg_lock.acquire()
+                # avgs[0] = str(dists[i])
+                # avgs[1] = str(ocpts[i])
             
-                avgs[2] = occupant_avg
-                avgs[3] = error_avg
-                avgs[4] = dist_avg
-                
-                
-                
-                
-                avg_lock.release()
-                # avgs[2] = avg_dists[i]
-                # avgs[3] = data
-                # avgs[4] = [index, a]
-                # err_avg = 0
-                # occupant_avg = 0
-                # dist_avg = 0
-                
-                # avgs[0] = sum(errors[i])/buf_num
-                # avgs[1] = sum(occupants[i])/buf_num
-                # avgs[2] = sum(avg_dists[i])/buf_num
+                # avgs[2] = get_o_avg(ocpts, i)
+                # avgs[3] = get_e_avg(errs, i)
+                # avgs[4] = get_dist_avg(dists, i)
+              
+                # avg_lock.release()
+
+
                 if rollover == (num_cams):
                     rollover = 0
                     index = index + 1
                 
-                # for j in range(buf_num):
-                #     err_avg = err_avg + errors[i][j]
-                #     occupant_avg = occupant_avg + occupants[i][j]
-                #     dist_avg = dist_avg + avg_dists[i][j]
-                #     avgs[1] = 9 + j
-                # avgs[0] = err_avg/buf_num
-                # avgs[1] = occupant_avg/buf_num
-                # avgs[2] = dist_avg/buf_num
-                # a = a + 1
     except:
         avgs[0] = 'Error'
         avgs[4] =  str(sys.exc_info())
 
     return
+
+def get_e_avg(errs, i):
+    error_avg = math.ceil(calc_avg(errs[i]))
+    return error_avg
+    
+def get_o_avg(ocpts, i):
+    occupant_avg = math.ceil(calc_avg(ocpts[i]))
+    return occupant_avg
+
+def get_dist_avg(dists, i):
+    dist_avg = round(calc_avg(dists[i]), 2)
+    return dist_avg
+
+
+
+
 
 def calc_avg(num_list):
     total = 0
@@ -104,53 +103,7 @@ def calc_avg(num_list):
     else:
         avg = 0
         
-    return avg
-
-
-
-def queue_parse(all_output_stats, buf_num, avgs, removed):
-    #each entry within this will be a list of occupants, errors, avg dists
-    all_out = [[[None]*3]* buf_num] * len(all_output_stats)
-    a = 0
-    time.sleep(10)
-    try:
-        while(True):
-            #location of oldest entry in mega list
-            index = a % buf_num
-            
-            #for every queue passed in, replace oldest entry in mega list and calculate avgs
-            for i, q in enumerate(all_output_stats):
-                #if the q has readable values, replace oldest entry with the new stats list
-                # if not q.empty():
-                all_out[i][index] = all_output_stats[i].get()
-               
-                    # if not q.full() and not removed.value:
-                    #     q.put(recent[i])
-                
-                # reset avgs
-                err_avg = 0
-                occupant_avg = 0
-                dist_avg = 0
-                
-                #cycle through every stats list in this queue to calculate avgs
-                for j in range(buf_num):
-                    err_avg = err_avg + all_out[i][j][0]
-                    occupant_avg = occupant_avg + all_out[i][j][1]
-                    # dist_avg = dist_avg + all_out[i][j][2]
-                    avgs[1] = j
-                    
-                avgs[0] = 3
-                avgs[0] = err_avg/buf_num
-                avgs[1] = occupant_avg/buf_num
-                # avgs[2] = dist_avg/buf_num
-                
-            #increment counter
-            a = a + 1
-    except:
-        print("analysis error")
-    return
-
-    
+    return avg    
 
 #buffer of past three frame data stuff?
 # realpts, str(time), errors, occupants, avg_dist

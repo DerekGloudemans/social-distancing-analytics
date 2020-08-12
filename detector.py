@@ -46,9 +46,10 @@ WEIGHTS = './data/yolov4.weights'
 #
 #   return - model - the object detection model
 def start_model(gpu):
+    
 
     tf.executing_eagerly()
-
+    
     #TODO will have to change when working with several gpus
     strategy = tf.distribute.OneDeviceStrategy(device=gpu)
    
@@ -81,9 +82,8 @@ def start_model(gpu):
 def frame_to_gpu(frame, gpu):
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     cur_frame = np.copy(frame)
-    im_data = utils.image_preprocess(cur_frame, [INPUT_SIZE, INPUT_SIZE]) 
+    im_data = utils.image_preprocess(cur_frame, [INPUT_SIZE, INPUT_SIZE])
     im_data = im_data[np.newaxis, ...].astype(np.float32)    
-    
     with tf.device(gpu):
         im_data = tf.convert_to_tensor(im_data)
 

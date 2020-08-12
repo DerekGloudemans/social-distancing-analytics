@@ -110,7 +110,7 @@ def find_all_pts(video_path, roi_only = True):
         _, frame = video_capture.read()
         # use = False
         
-        # cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
+        # FIXME cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
 
         # # Allow user to regrab frame if previous frame was not acceptable
         # while not use:

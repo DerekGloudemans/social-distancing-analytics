@@ -74,7 +74,6 @@ def stream_all(frames, times, ip, updated, i):
         print("Unexpected error:", sys.exc_info()[0])
         close_cap(stream)
         cv2.destroyAllWindows()
-        streamer.terminate()
     return
     
 #opens video capture objects for all input streams  

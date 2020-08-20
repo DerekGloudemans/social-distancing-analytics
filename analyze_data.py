@@ -12,6 +12,7 @@ Created on Fri Jul 31 10:35:56 2020
 # 6 website shows graphs and such
 import sys
 import math
+import numpy as np
 
 #TODO I think averages are correct, could be good to double check
 def main(out_q, buf_num ,num_cams, avgs, avg_lock, errs, ocpts, dists):
@@ -87,7 +88,17 @@ def get_dist_avg(dists, i):
     dist_avg = round(calc_avg(dists[i]), 2)
     return dist_avg
 
+def total_e_avg(errs):
+    error_avg = math.ceil(total_avg(errs))
+    return error_avg
+    
+def total_o_avg(ocpts):
+    occupant_avg = math.ceil(total_avg(ocpts))
+    return occupant_avg
 
+# def total_dist_avg(dists):
+#     dist_avg = round(total_avg(dists), 2)
+#     return dist_avg
 
 
 
@@ -105,6 +116,29 @@ def calc_avg(num_list):
         
     return avg    
 
+def total_avg(stat_list):
+    total = 0
+    for num_list in stat_list:
+        #find approx # of people/errors at each location, then add together for total approximation
+        total = total + calc_avg(num_list)
+        
+    return total 
+
+#want the average distance between people, isn't summed at all
+def total_dist_avg(stat_list):
+    total = 0
+    count = 0
+    for num_list in stat_list:
+        for num in num_list:
+            if num is not None:
+                total = total + num
+                count = count + 1
+    if count != 0:
+        avg = total/count
+    else:
+        avg = 0
+    dist_avg = round(avg, 2)    
+    return dist_avg  
 #buffer of past three frame data stuff?
 # realpts, str(time), errors, occupants, avg_dist
 #stats = errors, occupants, avg_dist

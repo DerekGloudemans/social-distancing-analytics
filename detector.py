@@ -205,6 +205,25 @@ def find_dist(mytree, real_pts):
 
     return avg_avg
 
+def find_min_dist(mytree, real_pts):
+    size = len(real_pts)
+    # middle = size//2
+    # med_dists = [None] * size
+    all_mins = [None] * size
+    for i, pt in enumerate(real_pts):
+        
+        dist, _ = mytree.query(pt, 2)
+        # med_dists[i] = dist[middle]
+        
+        #do this for every pt in the tree - see if there is a built in function for this
+        all_mins[i] = dist[1]
+        print(all_mins)
+    # med_med = med_dists[middle]
+    # avg_med = sum(med_dists)/len(med_dists)
+    min_dist = min(all_mins)
+
+    return min_dist
+
 
 # def find_occupants(frames, times, model, all_vid_info, files):
 

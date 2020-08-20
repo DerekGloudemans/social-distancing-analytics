@@ -28,11 +28,11 @@ import analyze_data as adat
 
 
 
-def main():
+def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind,out_q, bbox_q, image_q):
+# def main():
     #uncomment to verify that GPU is being used
     tf.debugging.set_log_device_placement(False)
-    importlib.reload(mp)
-
+    # importlib.reload(mp)
     ips = []
     vids = np.array([[]])
     
@@ -46,40 +46,60 @@ def main():
     
     #create VidObjs to store information about each camera
     vids = initialize_cams(transform_f, ips, vids)
-
+    
     num_cams = len(vids)
     #length of queues, kinda arbitrary - this is the number that will be used for moving avg analytics
     buf_num = 3
+    
+    
+    #need to fix these references
+    # errs = var_list[0]
+    # ocpts = var_list[1]
+    # dists = var_list[2]
+    # updated = var_list[3]
+    # frames = var_list[4]
+    # times = var_list[5]
+    # avgs = var_list[6]
+    # avg_lock = var_list[7]
+    # i_lock = var_list[8]
+    # ind = var_list[9]
+    # bbox_q = var_list[10]
+    # ind = var_list[11]
+    
+    #uncomment if running from this file
+    
+    # manager = mp.Manager()
+    # print('MP manager created')
+    # #  create manager to handle shared variables across processes
+    # updated = manager.Value(c_bool, False)
+    # frames = manager.list([None]* num_cams)
+    # times = manager.list([None]* num_cams)
+    # avgs = manager.list([None] * 5)
+    # avg_lock = manager.Lock()
+    # i_lock = manager.Lock()
+    # out_q = manager.Queue(num_cams*2)
+    # bbox_q = manager.Queue()
+    # ind = manager.Value(int, 0)
+    # image_q = manager.Queue(num_cams*2)
+    
+    # # sample = manager.list([None] * 5)
 
-    manager = mp.Manager()
-    print('MP manager created')
-    #  create manager to handle shared variables across processes
-    updated = manager.Value(c_bool, False)
-    frames = manager.list([None]* num_cams)
-    times = manager.list([None]* num_cams)
-    avgs = manager.list([None] * 5)
-    sample = manager.list([None] * 5)
-    avg_lock = manager.Lock()
-    i_lock = manager.Lock()
-    out_q = manager.Queue(num_cams*2)
-    bbox_q = manager.Queue()
-    index = manager.Value(int, 0)
-    errs = manager.list()
-    ocpts = manager.list()
-    s_lock = manager.Lock()
-    # for _ in range(num_cams):
-    #     ocpts.append( [None]* buf_num)
-    dists = manager.list()
-    for i in range(num_cams):
-        errs.append(manager.list([None]))
-        ocpts.append(manager.list([None]))
-        dists.append(manager.list([None]))
+    # errs = manager.list()
+    # ocpts = manager.list()
+    # dists = manager.list()
+    # s_lock = manager.Lock()
+    # # for _ in range(num_cams):
+    # #     ocpts.append( [None]* buf_num)
+    
+    # for i in range(num_cams):
+    #     errs.append(manager.list([None]))
+    #     ocpts.append(manager.list([None]))
+    #     dists.append(manager.list([None]))
 
 
     #stores frame data that has been transfered to GPU
     GPU_LIST = [0]
     # workers = setup_gpus(vids, gpu_list = GPU_LIST)
-    
     #start model
     # model = detector.start_model()
     streamers = []
@@ -91,22 +111,22 @@ def main():
             streamers.append(streamer)
         for streamer in streamers:
             streamer.daemon = True
+            
             streamer.start()
             print('Streamer processes started')
-        
         # analysis = mp.Process(target=adat.main, args=(all_output_stats, buf_num, avgs, removed))
         analysis = mp.Process(target=adat.main, args=(out_q, buf_num, num_cams, avgs, avg_lock, errs, ocpts, dists)) 
-        # analysis.daemon = True
+        analysis.daemon = True
         analysis.start()
         print('Analysis process started')
         
         
             
-        
+        errs[0][0] = 4
         #wait until frames are starting to be read
         while(not updated.value):   
             continue
-        
+        errs[0][0] = 5
         time.sleep(2)
         #find and assign the frame size of each stream
         #TODO may have to resize frames or something for running through the model in batches
@@ -115,9 +135,8 @@ def main():
             vid[7] = (frames[i].shape[:2])
         prev_time = time.time()
         
-        
-        
-        logic_gpus = True
+        work_processes = []
+        logic_gpus = False
         #need better gpu setup probably
         if logic_gpus:
             p_devices = tf.config.list_physical_devices('GPU')
@@ -130,27 +149,26 @@ def main():
             print("Simulated GPUS: ", len(logical_devices))
             # print(logical_devices)
             # print(type(logical_devices[0]))
-            work_processes = []
+            
             
             for gpu in logical_devices:
-                work_processes.append(mp.Process(target=proc_video, args=(index, i_lock,frames, times, bbox_q, vids, gpu)))
+                work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames, times, bbox_q, vids, gpu)))
         else: 
             for gpu in GPU_LIST:
-                work_processes.append(mp.Process(target=proc_video, args=(index, i_lock,frames,times,bbox_q, vids, gpu)))
+                work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, vids, gpu)))
         
         for proc in work_processes:
             proc.daemon = True
             proc.start()
         print('Worker processes started') 
         
-        
-        post_proc = mp.Process(target=post_processor, args=(bbox_q, vids, out_q, frames, times))
+        post_proc = mp.Process(target=post_processor, args=(bbox_q, vids, out_q, frames, times, image_q))
         post_proc.daemon = True
         post_proc.start()
         print('Post process started')    
         #make this main process be responsible for saving at intervals
         
-        #itereate through frames with a shared index 
+        #itereate through frames with a shared ind 
         
         
         #make a function that does this
@@ -158,11 +176,10 @@ def main():
         #every wr=orker will constantly eb running this
         #needs an overarching queue or pointer o correct location in list to process
         
-        
         #continuously loop until keyboard interrupt
-        time.sleep(3)
+        
         while(True):
-            time.sleep(.5)
+            continue
             # with s_lock:
             #     print(sample)
     #         curr_time = time.time()
@@ -186,17 +203,16 @@ def main():
             proc.terminate()
             
         post_proc.terminate()
-
+    return
 
 ###---------------------------------------------------------------------------
 #   Saves frame with overlaid info
           
-def outpt_frame(ftpts, frame, vid, errors, occupants, bboxes):
+def outpt_frame(result, vid):
 
     frame_dir = vid[5]
     count = vid[6]
     
-    result = prep_frame(ftpts, frame, vid, errors, occupants, bboxes)
 
     cv2.imwrite(frame_dir + str(count) + '.jpg', result)
     count = count + 1
@@ -205,9 +221,7 @@ def outpt_frame(ftpts, frame, vid, errors, occupants, bboxes):
 ###---------------------------------------------------------------------------
 #   Shows frame with overlaid info
           
-def show_frame(ftpts, frame, vid, errors, occupants, bboxes, i):
-
-    result = prep_frame(ftpts, frame, vid, errors, occupants, bboxes)
+def show_frame(result, i):
 
     cv2.namedWindow("result" + str(i), cv2.WINDOW_NORMAL)
     cv2.imshow("result" + str(i), result) 
@@ -233,6 +247,7 @@ def prep_frame(ftpts, frame, vid, errors, occupants, bboxes):
     result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
     return result
+
 
 
 ###---------------------------------------------------------------------------
@@ -354,8 +369,8 @@ class Worker():
     #given a shared variable i, loops constantly and processes frame at i
     #i should probably have a lock      
 
-# def proc_video(worker, index, i_lock, frames, times, out_q):
-def proc_video(index, i_lock, frames, times, bbox_q, vids, gpu):
+# def proc_video(worker, ind, i_lock, frames, times, out_q):
+def proc_video(ind, i_lock, frames, times, bbox_q, vids, gpu):
     worker = Worker(gpu)
     try:
         while(True):
@@ -364,9 +379,9 @@ def proc_video(index, i_lock, frames, times, bbox_q, vids, gpu):
                 # save current index so it doesn't change while processing
                 #lock ensures that multiple processes aren't working on same frame
                 with i_lock:
-                    i = index.value
-                    index.value = index.value + 1
-                    index.value = index.value % len(frames)
+                    i = ind.value
+                    ind.value = ind.value + 1
+                    ind.value = ind.value % len(frames)
                     #loop through frames, find people, record occupants and infractions 
                     #TODO not sure the best way to protect smae vid from being accessed simultaneously
                     vid = vids[i]
@@ -400,7 +415,7 @@ def proc_video(index, i_lock, frames, times, bbox_q, vids, gpu):
 #monitor queue size so it doesn't get ridiciulously big
 
 #could move writing to a different process but probably not atm
-def post_processor(bbox_q, vids, out_q, frames, times):
+def post_processor(bbox_q, vids, out_q, frames, times, image_q = None):
     try:
         while True:
             if not bbox_q.empty():
@@ -423,30 +438,47 @@ def post_processor(bbox_q, vids, out_q, frames, times):
                 if realpts.size > 2:
                     mytree = scipy.spatial.cKDTree(realpts)
                     errors = detector.compliance_count(mytree, realpts)
+                    
+                    #FIXME can probably do these both in 1 function
                     avg_dist = detector.find_dist(mytree, realpts)
+                    avg_min_dist = detector.find_min_dist(mytree, realpts)
                 else:
                     errors = 0
+                    avg_min_dist = None
                     avg_dist = None
                 occupants = ftpts.size//2
                 #output info to csv file  
                 with open(filename, 'a', newline='') as base_f:
                     writer = csv.writer(base_f)
-                    utils.video_write_info(writer, realpts, str(dt), errors, occupants, avg_dist)
+                    utils.video_write_info(writer, realpts, str(dt), errors, occupants, avg_dist, avg_min_dist)
                         
-                stats = [i, errors, occupants, avg_dist]
+                stats = [i, errors, occupants, avg_min_dist]
                 
                 #put outpt data into queue so it is accessible by the analyzer
                 if out_q.full():
                     out_q.get()
                 out_q.put(stats)
                 
+                #FIXME this should be set somewhere else
+                frame_show = True
+                
+                result = prep_frame(ftpts, frame, vid, errors, occupants, bboxes)
+                
+                # if frame_save or frame_show:
+                #     result = prep_frame(ftpts, frame, vid, errors, occupants, bboxes)
+
                 #save frames
                 if frame_save:
-                    outpt_frame(ftpts, frame, vid, errors, occupants, bboxes)
+                    outpt_frame(result, vid)
                     
-                # FIXME - just for debugging, show frame on screen
-                show_frame(ftpts, frame, vid, errors, occupants, bboxes, i)  
-                if cv2.waitKey(1) & 0xFF == ord('q'): break
+                if frame_show:
+                    if image_q.full():
+                        image_q.get()
+                    image_q.put(result)
+                    
+                # # FIXME - just for debugging, show frame on screen
+                # show_frame(result, i)  
+                # if cv2.waitKey(1) & 0xFF == ord('q'): break
     except:
         print("Unexpected error:", sys.exc_info()[0])
         cv2.destroyAllWindows()

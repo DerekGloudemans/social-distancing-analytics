@@ -4,7 +4,7 @@ Created on Fri Jul 10 15:11:48 2020
 
 @author: Nikki
 """
-import addresses as ad
+
 import cv2
 import datetime
 import sys

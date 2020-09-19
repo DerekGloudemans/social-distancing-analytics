@@ -1,0 +1,90 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>All camera data</title>
+    <style>
+        #menu a{
+         text-decoration: none;
+         color: #333;
+         font-family: sans-serif;
+         padding: 5px;
+        }
+        #menu ul li{
+         display: inline;
+        }
+        .dropdown-menu{
+         display: none;
+        } 
+    </style>
+    <script src="//code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js" integrity="sha256-yr4fRk/GU1ehYJPAs8P4JlTgu0Hdsp4ZKrx8bDEDC3I=" crossorigin="anonymous"></script>
+    <script type="text/javascript" charset="utf-8">
+        $(document).ready(function() {
+            const image_elem = document.getElementById("streamer-image");
+            // Use a "/test" namespace.
+            // An application can open a connection on multiple namespaces, and
+            // Socket.IO will multiplex all those connections on a single
+            // physical channel. If you don't care about multiple channels, you
+            // can set the namespace to an empty string.
+            namespace = '/test';
+
+            // Connect to the Socket.IO server.
+            // The connection URL has the following format, relative to the current page:
+            //     http[s]://<domain>:<port>[/<namespace>]
+            var socket = io(namespace);
+
+            // Event handler for new connections.
+            // The callback function is invoked when a connection with the
+            // server is established.
+            socket.on('connect', function() {
+                socket.emit('my_event', {data: 'I\'m connected!'});
+            });
+
+            // Event handler for server sent data.
+            // The callback function is invoked whenever the server emits data
+            // to the client. The data is then displayed in the "Received"
+            // section of the page.
+            socket.on('my_response', function(msg, cb) {
+                $('#log').text('<br>' + $('<div/>').text('Received #' + msg.count + ': ' + msg.data).html());
+                if (cb)
+                    cb();
+                $('#ping-pong').text('a')
+            });
+            
+            //cb is the namespace
+            socket.on('update', function(msg, cb) {
+                $('#occ').text($('<div/>').text(msg.occ).html());
+                $('#comp').text($('<div/>').text(msg.comp + '%').html());
+                $('#dist').text($('<div/>').text(msg.dist + ' feet').html());
+                $('#dt').text($('<div/>').text(msg.time).html());
+                
+                image_elem.src = msg.image;
+                if (cb)
+                    cb();
+            });
+            
+          });
+        });
+
+    </script>
+
+</head>
+<body>
+    <select name = colours method="GET" action="/">
+        {% for colour in colours %}
+        <option value= "{{colour}}" SELECTED>{{colour}}</option>"
+        {% endfor %}
+yy    </select>    
+    <h1>All camera data</h1>
+    <h2>Occupants:</h2>
+    <div id="occ"></div>
+    <h2>Percent compliance:</h2>
+    <div id="comp"></div>
+    <h2>Average distance between occupants:</h2>
+    <div id="dist"></div>
+    <h2>Most recently processed frame:</h2>
+    <img id="streamer-image" src ="">
+    <h2>Last updated:</h2>
+    <div id="dt"></div>
+</body>
+</html>

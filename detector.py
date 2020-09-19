@@ -5,7 +5,6 @@ Created on Tue Jul 14 15:44:39 2020
 @author: Nikki
 """
 import multiprocessing as mp
-import addresses
 import cv2
 import sys
 import datetime
@@ -72,6 +71,34 @@ def start_model(gpu):
         
         #load existing weights into model
         utils.load_weights(model, WEIGHTS)
+    
+    return model
+
+def start_model():
+    
+
+    tf.executing_eagerly()
+    
+    #TODO will have to change when working with several gpus
+   
+    # strategy = tf.distribute.MirroredStrategy()
+
+    #generate model
+    input_layer = tf.keras.Input([INPUT_SIZE, INPUT_SIZE, 3])
+    
+    feature_maps = YOLOv4(input_layer, NUM_CLASS)
+    bbox_tensors = []
+    for i, fm in enumerate(feature_maps):
+        bbox_tensor = decode(fm, NUM_CLASS, i)
+        bbox_tensors.append(bbox_tensor)    
+    model = tf.keras.Model(input_layer, bbox_tensors)
+    print('Model built')
+    
+    #force to run eagerly
+    model.run_eagerly = True
+    
+    #load existing weights into model
+    utils.load_weights(model, WEIGHTS)
     
     return model
         

@@ -5,6 +5,9 @@ Created on Mon Jul 13 13:25:10 2020
 @author: Nikki
 """
 
+# numpy, scipy, tensorflow
+#tensorflow + weights, flask
+
 import importlib
 import multiprocessing as mp
 import ip_streamer
@@ -98,7 +101,7 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
 
 
     #stores frame data that has been transfered to GPU
-    GPU_LIST = [0]
+    GPU_LIST = []#[0]
     # workers = setup_gpus(vids, gpu_list = GPU_LIST)
     #start model
     # model = detector.start_model()
@@ -154,9 +157,11 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
             for gpu in logical_devices:
                 work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames, times, bbox_q, vids, gpu)))
         else: 
-            for gpu in GPU_LIST:
+            if len(GPU_LIST) > 0:
+                for gpu in GPU_LIST:
+                    work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, vids, gpu)))
+            else:
                 work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, vids, gpu)))
-        
         for proc in work_processes:
             proc.daemon = True
             proc.start()
@@ -347,11 +352,16 @@ class Worker():
         
         if isinstance(i, int):
             self.gpu = "/gpu:" + str(i)            
-        else:
+        elif isinstance(i, str):
             self.gpu = i
+        elif i is None:
+            self.gpu = None
+        else:
+            raise ValueError('The gpu is not properly setup, and the CPU is not working')
             
         #sets up a model on this gpu to predict with
-        self.model = detector.start_model(self.gpu)
+        if self.gpu is None:
+            self.model = detector.start_model()
     
     def mark_avail(self):
         self.avail = True
@@ -361,7 +371,11 @@ class Worker():
         
     def set_frame(self, frame):
         self.cur_frame = frame
-        self.gpu_frame = detector.frame_to_gpu(self.cur_frame, self.gpu)
+        if self.gpu is None:
+            self.gpu_frame = self.cur_frame
+        else:
+            self.gpu_frame = detector.frame_to_gpu(self.cur_frame, self.gpu)
+            
         
     def get_bboxes(self, frame_size):
         return detector.person_bboxes(self.model, self.gpu_frame, frame_size)
@@ -371,6 +385,7 @@ class Worker():
 
 # def proc_video(worker, ind, i_lock, frames, times, out_q):
 def proc_video(ind, i_lock, frames, times, bbox_q, vids, gpu):
+
     worker = Worker(gpu)
     try:
         while(True):
@@ -560,4 +575,35 @@ def fill_vid_array(name, pix_real, real_pix, save = False):
         
             
 if __name__ == '__main__':
-    main()
+    manager = mp.Manager()
+    buf_num = 3
+    global errs
+    global ocpts
+    global dists
+    errs = manager.list()
+    ocpts = manager.list()
+    dists = manager.list()
+    
+    #FIXME need a better way to do this (should be based on how many cameras initialize)
+    #should initialize cameras here instead of in mp vid
+    num_cams = 2
+
+    updated = manager.Value(c_bool, False)
+    frames = manager.list([None]* num_cams)
+    times = manager.list([None]* num_cams)
+    avgs = manager.list([None] * 5)
+    avg_lock = manager.Lock()
+    i_lock = manager.Lock()
+    out_q = manager.Queue(num_cams*2)
+    bbox_q = manager.Queue()
+    ind = manager.Value(int, 0)
+    
+    global image_q
+    image_q = manager.Queue(num_cams*2)
+    
+    for i in range(num_cams):
+        errs.append(manager.list([None]))
+        ocpts.append(manager.list([None]))
+        dists.append(manager.list([None]))
+        
+    main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind,out_q, bbox_q, image_q)

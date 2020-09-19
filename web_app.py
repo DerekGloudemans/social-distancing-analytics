@@ -156,7 +156,7 @@ if __name__ == '__main__':
         proc.start()
         while bbox_q.empty():
             socketio.sleep(.5)
-        socketio.run(app, host='192.168.86.245', port=8000, debug=True,
+        socketio.run(app, host='169.254.45.230/16', port=8000, debug=True,
                               use_reloader=False)
         # while True:
         #     if not image_q.empty():

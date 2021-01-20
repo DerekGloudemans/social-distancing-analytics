@@ -1,20 +1,18 @@
 <!DOCTYPE HTML>
 <html>
 <head>
-    <title>All camera data</title>
+    <title>Camera monitor</title>
     <style>
         #menu a{
-         text-decoration: none;
-         color: #333;
-         font-family: sans-serif;
-         padding: 5px;
+            display: inline-block;
         }
         #menu ul li{
-         display: inline;
+         
         }
         .dropdown-menu{
-         display: none;
+         display: list-item;
         } 
+        
     </style>
     <script src="//code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
     <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js" integrity="sha256-yr4fRk/GU1ehYJPAs8P4JlTgu0Hdsp4ZKrx8bDEDC3I=" crossorigin="anonymous"></script>
@@ -63,6 +61,10 @@
                     cb();
             });
             
+            $("#menu li").hover(function(){
+            $(".dropdown-menu", this).slideDown(100);
+          }, function(){
+            $(".dropdown-menu", this).stop().slideUp(100);
           });
         });
 
@@ -70,12 +72,22 @@
 
 </head>
 <body>
-    <select name = colours method="GET" action="/">
-        {% for colour in colours %}
-        <option value= "{{colour}}" SELECTED>{{colour}}</option>"
-        {% endfor %}
-yy    </select>    
-    <h1>All camera data</h1>
+    <div id="menu">
+        <li><a href="">Locations</a>
+          <ul>
+        
+            <ul class="dropdown-menu">
+                {% for loc in locations %}
+                  <li><a href="{{ url_for('cam', id1 = loc) }}">{{loc}}</a></li>
+                {% endfor %}
+              </ul>
+          </ul>
+        </li>
+        <li><a href="{{ url_for('downloads') }}">Archive</a>
+      </ul>
+    </div>
+    
+    <h1>{{title}}</h1>
     <h2>Occupants:</h2>
     <div id="occ"></div>
     <h2>Percent compliance:</h2>

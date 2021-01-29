@@ -17,6 +17,7 @@ import numpy as np
 import time
 from ctypes import c_bool
 import scipy.spatial
+import os
 
 import tensorflow as tf
 from core import utils
@@ -31,7 +32,7 @@ import analyze_data as adat
 
 
 
-def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind,out_q, bbox_q, image_q):
+def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind,out_q, bbox_q, image_q, config):
 # def main():
     #uncomment to verify that GPU is being used
     tf.debugging.set_log_device_placement(False)
@@ -40,15 +41,15 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
     vids = np.array([[]])
     
     # file containing camera information
-    transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/transforms.csv'
-    transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/test.csv'
-    transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/test_all.csv'
-    transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/aot_transforms_better.csv'
+    # transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/transforms.csv'
+    # transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/test.csv'
+    # transform_f = 'C:/Users/Nikki/Documents/work/inputs-outputs/test_all.csv'
+    # transform_f = './config/LAMBDA_TEST.config'
     
     
     
     #create VidObjs to store information about each camera
-    vids = initialize_cams(transform_f, ips, vids)
+    vids = initialize_cams(config, ips, vids)
     
     num_cams = len(vids)
     #length of queues, kinda arbitrary - this is the number that will be used for moving avg analytics
@@ -276,50 +277,81 @@ def save_files(vids):
 
 ###---------------------------------------------------------------------------
 #   Creates VidObjs from addresses listed in csvfile
-   
+def parse_config_file(config_file):
+ all_blocks = []
+ current_block = None
+ with open(config_file, 'r') as f:
+     for line in f:
+         # ignore empty lines and comment lines
+         if line is None or len(line.strip()) == 0 or line[0] == '#':
+             
+             if current_block is not None:
+                 # stack im and gps points into np arrays
+                 current_block['impts'] = np.stack([current_block['im1'],current_block['im2'],current_block['im3'],current_block['im4']])
+                 del current_block['im1']
+                 del current_block['im2']
+                 del current_block['im3']
+                 del current_block['im4']
+             
+                 current_block['gpspts'] = np.stack([current_block['gps1'],current_block['gps2'],current_block['gps3'],current_block['gps4']])
+                 del current_block['gps1']
+                 del current_block['gps2']
+                 del current_block['gps3']
+                 del current_block['gps4']
+                 
+                 all_blocks.append(current_block)
+                 current_block = None
+                
+             continue
+         strip_line = line.strip()
+         if len(strip_line) > 2 and strip_line[:2] == '__' and strip_line[-2:] == '__':
+             # this is a configuration block line
+             # first check if this is the first one or not
+             if current_block is not None: 
+                 all_blocks.append(current_block)
+             current_block = {}
+             current_block["name"] = str(strip_line[2:-2])
+
+         elif '==' in strip_line:
+             pkey, pval = strip_line.split('==')
+             pkey = pkey.strip()
+             pval = pval.strip().split("#")[0] # remove trailing comments
+             
+             # parse out coordinate values
+             try:
+                 pval1,pval2 = pval.split(",")
+                 pval1 = float(pval1)
+                 pval2 = float(pval2)
+                 pval = np.array([pval1,pval2])
+             except ValueError:
+                 try:    
+                     pval = float(pval)    
+                 except ValueError:
+                     pass 
+                 
+             current_block[pkey] = pval
+             
+         else:
+             raise AttributeError("""Got a line in the configuration file that isn't a block header nor a 
+             key=value.\nLine: {}""".format(strip_line))
+     
+ return all_blocks
+
 def initialize_cams(transform_f, ips, vids):
-    with open(transform_f, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        for i, row in enumerate(reader):
-            try:
-                vid_path = row[0]
-                ips.append(vid_path)
-                pixr = row[1]
-                pix_real = ast.literal_eval(pixr)
-                realp = row[2]
-                real_pix = ast.literal_eval(realp)
-            
-                # pix_real = np.array(pix_real)
-                if vid_path[:3] == 'C:/':
-                    fragments = vid_path.split('/')
-                    end = fragments[-1]
-                    extended = end.split('.')
-                    name = extended[0]
-                    print('Video ' + str(i +1) + ' path recognized: ' + name)
-                elif vid_path[:7] == 'rtsp://':
-                    fragments = vid_path.split('@')
-                    end = fragments[1]
-                    extended = end.split('/')
-                    name = extended[0]
-                    print('IP cam ' + str(i +1) + ' path recognized: ' + name)
-                else:
-                    print('Invalid camera name')
-                
-                cur_vid = fill_vid_array(name, pix_real, real_pix, save = False)
-                vids = np.append(vids,cur_vid) #True))
-                print('Cam ' + str(i + 1) + ' initialized')
-                print()
-                
-            except:
-                print('Cam ' + str(i + 1) + ' FAILED initialization')
-                print()
-                
-    size = np.size(vids)
-    cols = 8
-    rows = size//cols
     
-    vids = np.reshape(vids, [rows, cols])        
-    return vids
+    cameras = parse_config_file(config)
+    keepers = [] 
+    for camera in cameras:
+        # verify address is valid
+        test = cv2.VideoCapture(camera["address"])
+        if test.isOpened():
+            test.release()
+            # get perspective transforms
+            camera["im-gps"] = tform.get_best_transform(camera["impts"],camera["gpspts"])
+            camera["gps-im"] = tform.get_best_transform(camera["gpspts"],camera["impts"])
+            keepers.append(camera)
+               
+    return keepers
 ###---------------------------------------------------------------------------
 #       
 
@@ -583,7 +615,8 @@ if __name__ == '__main__':
     errs = manager.list()
     ocpts = manager.list()
     dists = manager.list()
-    
+    config = './config/LAMBDA_TEST.config'
+
     #FIXME need a better way to do this (should be based on how many cameras initialize)
     #should initialize cameras here instead of in mp vid
     num_cams = 2
@@ -606,4 +639,4 @@ if __name__ == '__main__':
         ocpts.append(manager.list([None]))
         dists.append(manager.list([None]))
         
-    main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind,out_q, bbox_q, image_q)
+    main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind,out_q, bbox_q, image_q,config)

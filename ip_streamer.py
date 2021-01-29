@@ -20,7 +20,7 @@ from ctypes import c_bool
 #make separate processes
 #need to check that frame grabbed exists and hasn't already been processed
 def main():
-    ips = ['C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample1_1.mp4','C:/Users/Nikki/Documents/work/inputs-outputs/video/AOTsample2_1.mp4']
+    ips = ['/home/worklab/Data/cv/video/AOTsample1_1.mp4']
     m = mp.Manager()
     updated = m.Value(c_bool, False)
     frames = m.list([None] * len(ips))
@@ -40,7 +40,7 @@ def main():
         
         while True:
             for i in range(len(ips)):
-                cv2.namedWindow("result" + str(i), cv2.WINDOW_NORMAL)
+                #cv2.namedWindow("result" + str(i), cv2.WINDOW_NORMAL)
                 cv2.imshow("result" + str(i), frames[i])
             if cv2.waitKey(1) & 0xFF == ord('q'): break
     except:

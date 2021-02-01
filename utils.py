@@ -358,9 +358,9 @@ def unfreeze_all(model, frozen=False):
 ###---------------------------------------------------------------------------
 #   Outputs oocupancy data to a txt file
 
-def video_write_info(f, real_ftpts, dt, count, people, avg_dist, avg_min_dist):
+def video_write_info(f, real_ftpts, dt, count, people, avg_dist, avg_min_dist,cam_name):
     pts = real_ftpts.tolist()
-    f.writerow([dt, people, count, avg_dist, avg_min_dist, pts])
+    f.writerow([dt,cam_name, people, count, avg_dist, avg_min_dist, pts])
     
 
 ###---------------------------------------------------------------------------
@@ -375,7 +375,7 @@ def overlay_occupancy(img, errors, people, size):
         comp = (1.0 - (float(errors) / float(people))) * 100
     else:
         comp = 100
-    compliance = "Compliance: {}%".format(comp)
+    compliance = "Compliance: {}%".format(np.round(comp,1))
 
     #calculate size text will occupy, then adjust so overlay appears in top right corner
     x = size[1]
@@ -464,6 +464,7 @@ def find_dist(mytree, real_pts):
     # avg_med = sum(med_dists)/len(med_dists)
     avg_avg = sum(avgs)/len(avgs)
 
+    avg_avg = avg_avg * (288200**2 + 364000**2)**(0.5)
     return avg_avg
 
 def find_min_dist(mytree, real_pts):
@@ -483,5 +484,6 @@ def find_min_dist(mytree, real_pts):
     # avg_med = sum(med_dists)/len(med_dists)
     min_dist = min(all_mins)
 
+    min_dist = min_dist * (288200**2 + 364000**2)**(0.5)
     return min_dist
     

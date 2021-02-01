@@ -142,7 +142,7 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
             for gpu in GPU_LIST:
                 work_processes.append(ctx.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, cameras, gpu)))
         else:
-            work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, cameras, gpu)))
+            work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, cameras, 0)))
         for proc in work_processes:
             proc.daemon = True
             proc.start()
@@ -159,7 +159,7 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
         
         #make a function that does this
         #make a process for every worker
-        #every wr=orker will constantly eb running this
+        #every worker will constantly be running this
         #needs an overarching queue or pointer o correct location in list to process
         
         #continuously loop until keyboard interrupt
@@ -227,7 +227,6 @@ def prep_frame(ftpts, frame, camera, errors, occupants, ped_bboxes,veh_bboxes,cl
     origin = camera["estimated_camera_location"] 
 
     frame_size = camera["frame_size"]
-    print(frame_size)
     #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     if len(ped_bboxes) > 0:
@@ -380,7 +379,7 @@ class Worker():
         self.avail = False
         
     def set_frame(self, frame):
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = F.to_tensor(frame)
         frame = F.normalize(frame,mean=[0.485, 0.456, 0.406],
                                               std=[0.229, 0.224, 0.225])
@@ -453,7 +452,7 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
                 im = F.to_pil_image(im.cpu())
                 open_cv_image = np.array(im)
                 im = open_cv_image.copy()/255.0
-                im = im[:,:,::-1]
+                #im = im[:,:,::-1]
                 
                 for ped in blur:
                     im = utils.find_blur_face(ped.int(),im)
@@ -482,14 +481,25 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
 #could move writing to a different process but probably not atm
 def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
     classes = utils.read_class_names("./config/coco.names")
+    
+    start_time = time.time()
+    start_time = time.strftime('%Y-%m-%d %H-%M-%S', time.localtime(start_time))
+    
+    f_directory = cameras[0]["output"].split("/")[:-1]
+    f_directory.append("{}_output_frames".format(start_time))
+    f_directory = "/".join(f_directory)                                                
+    os.mkdir(f_directory)     
 
+    frames_processed = np.zeros(len(cameras))
+    
     try:
         while True:
+            
             if not bbox_q.empty():
                 box_ind = bbox_q.get()
                 ped_bboxes = box_ind[0]
                 veh_bboxes = box_ind[1]
-                i = box_ind[2]
+                i = int(box_ind[2])
                 frame = box_ind[3]
                 
                 # first, try and show frame
@@ -498,9 +508,10 @@ def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
                 # cv2.waitKey(0)
                 
                 camera = cameras[i]
-                filename = camera["address"]
+                filename = camera["output"].format(start_time)
+                cam_name = camera["name"]
                 pix_real = camera["im-gps"]
-                frame_show = camera["save_frames"]
+                frame_save = camera["save_frames"]
                 dt = times[i]
                 
                 #find ft pts and convert to real_world
@@ -523,38 +534,36 @@ def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
                 #output info to csv file  
                 with open(filename, 'a', newline='') as base_f:
                     writer = csv.writer(base_f)
-                    utils.video_write_info(writer, realpts, str(dt), errors, occupants, avg_dist, avg_min_dist)
+                    utils.video_write_info(writer, realpts, str(dt), errors, occupants, avg_dist, avg_min_dist,cam_name)
                         
                 stats = [i, errors, occupants, avg_min_dist]
                 
                 #put outpt data into queue so it is accessible by the analyzer
                 if out_q.full():
-                    out_q.get()
+                    temp = out_q.get()
                 out_q.put(stats)
                 
+                if frame_save:
+                    result = prep_frame(ped_pts, frame, camera, errors, occupants, ped_bboxes,veh_bboxes,classes)
                 
-                result = prep_frame(ped_pts, frame, camera, errors, occupants, ped_bboxes,veh_bboxes,classes)
                 
-                cv2.imshow("frame",result)
-                cv2.waitKey(1)
-                
-                # if frame_save or frame_show:
-                #     result = prep_frame(ftpts, frame, vid, errors, occupants, bboxes)
-                
-                ### UNCOMMENT AND USE
-                # frame_save = True
-                # #save frames
-                # if frame_save:
-                #     outpt_frame(result, vid)
-                    
+      
+                #save frames
+                if frame_save:
+                    frame_name = "{}/{}_{}_processed.jpg".format(f_directory,cam_name,int(frames_processed[i]))
+                    cv2.imwrite(frame_name,result*255)
+                        
                 # if frame_show:
                 #     if image_q.full():
                 #         image_q.get()
                 #     image_q.put(result)
                     
                 # # FIXME - just for debugging, show frame on screen
-                show_frame(result, i)  
-                if cv2.waitKey(1) & 0xFF == ord('q'): break
+                # show_frame(result, i)  
+                # if cv2.waitKey(1) & 0xFF == ord('q'): break
+                  
+                frames_processed[i] += 1
+                    
     except KeyboardInterrupt:
         print("Unexpected postprocessing error:", sys.exc_info()[0])
         cv2.destroyAllWindows()

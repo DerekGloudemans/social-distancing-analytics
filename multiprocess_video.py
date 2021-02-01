@@ -655,10 +655,13 @@ if __name__ == '__main__':
     ocpts = manager.list()
     dists = manager.list()
     config = './config/LAMBDA_TEST.config'
-
+    config = './config/ACCRE.config'
+    
+    
     #FIXME need a better way to do this (should be based on how many cameras initialize)
     #should initialize cameras here instead of in mp vid
-    num_cams = 2
+    num_cams = len(parse_config_file(config))
+
 
     updated = manager.Value(c_bool, False)
     frames = manager.list([None]* num_cams)

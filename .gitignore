@@ -13,6 +13,8 @@ data/yolov4.weights
 addresses.py
 mp_debug.py
 
-config/
+
 
 models/
+
+config/coco_resnet_50_map_0_335_state_dict.pt

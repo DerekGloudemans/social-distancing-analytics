@@ -95,6 +95,7 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
     #     ocpts.append(manager.list([None]))
     #     dists.append(manager.list([None]))
 
+    classes = utils.read_class_names("./config/coco.names")
 
     #stores frame data that has been transfered to GPU
     GPU_LIST = [i for i in range(torch.cuda.device_count())]
@@ -103,96 +104,72 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
     # model = detector.start_model()
     streamers = []
 
-    try:
-        #grab video frames in separate process
-        for i, camera in enumerate(cameras):
-            streamer = mp.Process(target=ip_streamer.stream_all, args=(frames, times, camera, updated, i))
-            streamers.append(streamer)
-        for streamer in streamers:
-            streamer.daemon = True
-            
-            streamer.start()
-            print('Streamer processes started')
-        # analysis = mp.Process(target=adat.main, args=(all_output_stats, buf_num, avgs, removed))
-        analysis = ctx.Process(target=adat.main, args=(out_q, buf_num, num_cams, avgs, avg_lock, errs, ocpts, dists)) 
-        analysis.daemon = True
-        analysis.start()
-        print('Analysis process started')
-        
-        
-            
-        errs[0][0] = 4
-        #wait until frames are starting to be read
-        while(not updated.value):   
-            continue
-        errs[0][0] = 5
-        time.sleep(2)
-        #find and assign the frame size of each stream
-        #TODO may have to resize frames or something for running through the model in batches
-        for i, camera in enumerate(cameras):
-            #TODO coould make a set_size function for easier use
-            camera["frame_size"] = (frames[i].shape[:2])
-        prev_time = time.time()
-        
-        work_processes = []
-        logic_gpus = False
-        #need better gpu setup probably
+    worker = Worker(2)
+    frame = cv2.imread("/home/worklab/Desktop/test1.png")
+    worker.set_frame(frame)
+    ped,veh = worker.get_bboxes()
+    cameras[0]["frame_size"] = (worker.gpu_frame[0].shape[:2])
 
-        if len(GPU_LIST) > 0:
-            for gpu in GPU_LIST:
-                work_processes.append(ctx.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, cameras, gpu)))
-        else:
-            work_processes.append(mp.Process(target=proc_video, args=(ind, i_lock,frames,times,bbox_q, cameras, gpu)))
-        for proc in work_processes:
-            proc.daemon = True
-            proc.start()
-        print('Worker processes started') 
+    im = F.normalize(worker.gpu_frame[0],mean = [-0.485/0.229, -0.456/0.224, -0.406/0.225],
+                                           std = [1/0.229, 1/0.224, 1/0.225])
+    im = F.to_pil_image(im.cpu())
+    open_cv_image = np.array(im)
+    im = open_cv_image.copy()/255.0
+    im = im[:,:,::-1]
+    #combine so bounding boxes remain associated with camera
+    i = 0
+    box_ind = (ped,veh,i,im)
+    
+    ped_bboxes = box_ind[0]
+    veh_bboxes = box_ind[1]
+    i = box_ind[2]
+    frame = box_ind[3]
+    
+    # first, try and show frame
+    #frame = frame.transpose(1, 2, 0)
+    # cv2.imshow("test",frame)
+    # cv2.waitKey(0)
+    
+    camera = cameras[i]
+    filename = camera["address"]
+    pix_real = camera["im-gps"]
+    frame_show = camera["save_frames"]
+    dt = times[i]
+    
+    #find ft pts and convert to real_world
+    ped_pts = utils.get_ftpts(ped_bboxes)
+    realpts = tform.transform_pt_array(ped_pts, pix_real)
+    
+    # verifies there is more than one point in the list (each point has size 2)]
+    if realpts.size > 2:
+        mytree = scipy.spatial.cKDTree(realpts)
+        errors = utils.compliance_count(mytree, realpts)
         
-        post_proc = ctx.Process(target=post_processor, args=(bbox_q, cameras, out_q, frames, times, image_q))
-        post_proc.daemon = True
-        post_proc.start()
-        print('Post process started')    
-        #make this main process be responsible for saving at intervals
-        
-        #itereate through frames with a shared ind 
-        
-        
-        #make a function that does this
-        #make a process for every worker
-        #every wr=orker will constantly eb running this
-        #needs an overarching queue or pointer o correct location in list to process
-        
-        #continuously loop until keyboard interrupt
-        
-        while(True):
-            continue
-            # with s_lock:
-            #     print(sample)
-    #         curr_time = time.time()
+        #FIXME can probably do these both in 1 function
+        avg_dist = utils.find_dist(mytree, realpts)
+        avg_min_dist = utils.find_min_dist(mytree, realpts)
+    else:
+        errors = 0
+        avg_min_dist = None
+        avg_dist = None
+    occupants = len(ped_bboxes)
+    #output info to csv file  
+    with open(filename, 'a', newline='') as base_f:
+        writer = csv.writer(base_f)
+        utils.video_write_info(writer, realpts, str(dt), errors, occupants, avg_dist, avg_min_dist)
             
-    #         # save outputs every 5 minutes
-    #         if (curr_time - prev_time) > (5 * 60):
-    #             save_files(vids)
-    #             prev_time = curr_time
-            
-  
-    except Exception as e:
-        print("Unexpected error: {}:".format(e), sys.exc_info())
-        cv2.destroyAllWindows()
-            
-        for streamer in streamers:
-            streamer.terminate()
-            streamer.join()
-            
-        analysis.terminate()
-        
-        for proc in work_processes:
-            proc.terminate()
-            proc.join()
-            
-        post_proc.terminate()
-        post_proc.join()
-    return
+    stats = [i, errors, occupants, avg_min_dist]
+    
+    #put outpt data into queue so it is accessible by the analyzer
+    if out_q.full():
+        out_q.get()
+    out_q.put(stats)
+    
+    
+    result = prep_frame(ped_pts, frame, camera, errors, occupants, ped_bboxes,veh_bboxes,classes)
+    
+    cv2.imshow("frame",result)
+    cv2.waitKey(0)
 
 ###---------------------------------------------------------------------------
 #   Saves frame with overlaid info
@@ -391,10 +368,6 @@ class Worker():
     def get_bboxes(self):
         confs,classes,bboxes = self.model(self.gpu_frame)
         
-        # also blur low confidence faces
-        blur_idxs = torch.cat([torch.where(classes == 0)[0],torch.where(classes == 1)[0]],dim = 0)
-        blurs = bboxes[blur_idxs].data.cpu()
-        
         # keep only high confidence objects
         obj_idxs = torch.where(confs > self.conf_cutoff)[0]
         confs = confs[obj_idxs]
@@ -417,7 +390,7 @@ class Worker():
         peds = out[ped_idxs].data.cpu()
         vehs = out[veh_idxs].data.cpu()
         
-        return peds,vehs,blurs
+        return peds,vehs
          
         # parse out pedestrians into one group, vehicles into another group
         
@@ -445,7 +418,7 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
                 #pretty sure manager objects already have lock control so the smae item isn't accessed from separate processes at once
                 #but that could also be a good lock to have
                 worker.set_frame(np.asarray(frames[i]))
-                ped_bboxes,veh_bboxes,blur = worker.get_bboxes()
+                ped_bboxes,veh_bboxes = worker.get_bboxes()
                 
                 # denormalize
                 im = F.normalize(worker.gpu_frame[0],mean = [-0.485/0.229, -0.456/0.224, -0.406/0.225],
@@ -454,10 +427,6 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
                 open_cv_image = np.array(im)
                 im = open_cv_image.copy()/255.0
                 im = im[:,:,::-1]
-                
-                for ped in blur:
-                    im = utils.find_blur_face(ped.int(),im)
-                
                 #combine so bounding boxes remain associated with camera
                 box_ind = (ped_bboxes,veh_bboxes,i,im)
                 
@@ -536,7 +505,7 @@ def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
                 result = prep_frame(ped_pts, frame, camera, errors, occupants, ped_bboxes,veh_bboxes,classes)
                 
                 cv2.imshow("frame",result)
-                cv2.waitKey(1)
+                cv2.waitKey(0)
                 
                 # if frame_save or frame_show:
                 #     result = prep_frame(ftpts, frame, vid, errors, occupants, bboxes)
@@ -649,7 +618,7 @@ if __name__ == '__main__':
 
     #FIXME need a better way to do this (should be based on how many cameras initialize)
     #should initialize cameras here instead of in mp vid
-    num_cams = 2
+    num_cams = 1
 
     updated = manager.Value(c_bool, False)
     frames = manager.list([None]* num_cams)

@@ -50,10 +50,9 @@ def main():
         cv2.destroyAllWindows()
 
 
-def stream_all(frames, times, ip, updated, i):
+def stream_all(frames, times, camera, updated, i):
     #list of ip addresses to get video from
-    stream = open_cap(ip)
-    # frames = [None] * len(ips)
+    stream = open_cap(camera["address"] )   # frames = [None] * len(ips)
     # times = [None] * len(ips)
     print(frames[i])
     print(times[i])

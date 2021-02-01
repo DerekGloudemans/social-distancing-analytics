@@ -74,7 +74,7 @@ def start_model(gpu):
     
     return model
 
-def start_model():
+def start_model(device):
     
 
     tf.executing_eagerly()
@@ -83,22 +83,23 @@ def start_model():
    
     # strategy = tf.distribute.MirroredStrategy()
 
-    #generate model
-    input_layer = tf.keras.Input([INPUT_SIZE, INPUT_SIZE, 3])
-    
-    feature_maps = YOLOv4(input_layer, NUM_CLASS)
-    bbox_tensors = []
-    for i, fm in enumerate(feature_maps):
-        bbox_tensor = decode(fm, NUM_CLASS, i)
-        bbox_tensors.append(bbox_tensor)    
-    model = tf.keras.Model(input_layer, bbox_tensors)
-    print('Model built')
-    
-    #force to run eagerly
-    model.run_eagerly = True
-    
-    #load existing weights into model
-    utils.load_weights(model, WEIGHTS)
+    with None:#tf.device(device):
+        #generate model
+        input_layer = tf.keras.Input([INPUT_SIZE, INPUT_SIZE, 3])
+        
+        feature_maps = YOLOv4(input_layer, NUM_CLASS)
+        bbox_tensors = []
+        for i, fm in enumerate(feature_maps):
+            bbox_tensor = decode(fm, NUM_CLASS, i)
+            bbox_tensors.append(bbox_tensor)    
+        model = tf.keras.Model(input_layer, bbox_tensors)
+        print('Model built')
+        
+        #force to run eagerly
+        model.run_eagerly = True
+        
+        #load existing weights into model
+        utils.load_weights(model, WEIGHTS)
     
     return model
         

@@ -12,3 +12,7 @@ data/yolov4.weights
 *.pyc
 addresses.py
 mp_debug.py
+
+config/
+
+models/

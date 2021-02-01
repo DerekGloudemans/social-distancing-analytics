@@ -124,13 +124,28 @@ def six_ft(pt1, a):
     a = math.radians(a)
     #convert to rad
     
+    #convert GPS to feet
+    lat = pt1[0] 
+    long = pt1[1]
+    lat_feet = lat*364000
+    long_feet = long*288200
+    
+    
     #find x and y component of point 6 ft away
     x = math.cos(a) * 6
     y = math.sin(a) * 6
     
-    #add to known point 
-    pt2 = pt1 + (x, y)
+    # #add to known point 
+    # pt2 = pt1 + (x, y)
     
+    lat_feet = lat_feet + x
+    long_feet = long_feet + y
+    
+    # derek added this
+    lat = lat_feet /364000
+    long = long_feet / 288200
+    
+    pt2 = np.array([lat,long])
     
     return(pt2)
 
@@ -198,16 +213,17 @@ def draw_ellipse(frame, pts, centers, mytree, pix_real):
             gps_center = gps_centers[i//4]
             dist, ind = mytree.query(gps_center, k=2)
             closest = mytree.data[ind[1]]
-            #dist = GPS_to_ft(gps_center, closest)
+            dist = GPS_to_ft(gps_center, closest)
+            dist = (dist,dist)
             if dist[1] < 6:
-                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 0, 0), thickness, line_type)
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0, 0, 1), thickness, line_type)
                 count = count + 1
             elif dist[1] < 8:
-                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 140, 0), thickness, line_type)
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0, 0.6, 1), thickness, line_type)
             elif dist[1] < 10:
-                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (255, 255, 0), thickness, line_type)            
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0,1, 1), thickness, line_type)            
             else:
-                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0,255,0), thickness, line_type)
+                cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0,1,0), thickness, line_type)
             
             # if ct<4:
             #     cv2.ellipse(ellipses, (x,y), (major, minor), 0, 0, 360, (0, 0, 255), thickness, line_type)
@@ -223,9 +239,11 @@ def draw_ellipse(frame, pts, centers, mytree, pix_real):
         i = i + 4
         ct = ct + 1
         
-
+    
     #combine original image and ellipse image into one
     all_img = cv2.addWeighted(ellipses, alpha, frame, 1-alpha, 0)
+    
+   
     return all_img, count
 
 

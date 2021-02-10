@@ -668,7 +668,7 @@ def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
 if __name__ == '__main__':
     
      #add argparse block here so we can optinally run from command line
-     try:
+    try:
         parser = argparse.ArgumentParser()
         parser.add_argument("config", help= '<Required> string',type = string)
         args = parser.parse_args()

@@ -670,7 +670,7 @@ if __name__ == '__main__':
      #add argparse block here so we can optinally run from command line
     try:
         parser = argparse.ArgumentParser()
-        parser.add_argument("config", help= '<Required> string',type = string)
+        parser.add_argument("config", help= '<Required> string',type = str)
         args = parser.parse_args()
         config = args["config"]
         print(config)

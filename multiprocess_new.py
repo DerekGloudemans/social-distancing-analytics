@@ -129,7 +129,7 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
         while(not updated.value):   
             continue
         errs[0][0] = 5
-        time.sleep(2)
+        time.sleep(15)
 
         #find and assign the frame size of each stream
         for i, camera in enumerate(cameras):

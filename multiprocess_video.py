@@ -17,6 +17,7 @@ import time
 from ctypes import c_bool
 import scipy.spatial
 import os
+import argparse
 
 import pixel_realworld as pr
 import transform as tform
@@ -665,6 +666,18 @@ def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
         
             
 if __name__ == '__main__':
+    
+     #add argparse block here so we can optinally run from command line
+     try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("config", help= '<Required> string',type = string)
+        args = parser.parse_args()
+        config = args["config"]
+      
+    except:
+        config = './config/ACCRE_single.config'
+        print("No config path specified. Using default config: {}".format(config))
+        
     manager = mp.Manager()
     ctx = mp.get_context('spawn')
     buf_num = 6
@@ -674,8 +687,8 @@ if __name__ == '__main__':
     errs = manager.list()
     ocpts = manager.list()
     dists = manager.list()
-    config = './config/LAMBDA_TEST.config'
-    config = './config/ACCRE_single.config'
+    # config = './config/LAMBDA_TEST.config'
+    # config = './config/ACCRE_single.config'
     
     
     #FIXME need a better way to do this (should be based on how many cameras initialize)

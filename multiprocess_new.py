@@ -475,7 +475,7 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
 #could move writing to a different process but probably not atm
 def post_processor(bbox_q, cameras, out_q, frames, times):
     classes = utils.read_class_names("./config/coco.names")
-    
+    start = time.time()
     start_time = time.time()
     start_time = time.strftime('%Y-%m-%d--%H-%M-%S', time.localtime(start_time))
     
@@ -565,9 +565,9 @@ def post_processor(bbox_q, cameras, out_q, frames, times):
             # if cv2.waitKey(1) & 0xFF == ord('q'): break
               
             frames_processed[i] += 1
-            
+            fps = frames_processed[i] / (time.time() - start)
             if frames_processed[i] % 10 == 0:
-                print("{} frame {} processed by GPU {}: {} occupants, {}% compliant".format(cam_name,int(frames_processed[i]),worker_id,occupants,100*(1-np.round(errors/(occupants+1e-6),2))))
+                print("{} frame {} processed by GPU {} ({}fps): {} occupants, {}% compliant".format(cam_name,int(frames_processed[i]),worker_id,fps,occupants,100*(1-np.round(errors/(occupants+1e-6),2))))
     
     return
 ###---------------------------------------------------------------------------

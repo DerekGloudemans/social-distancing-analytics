@@ -673,7 +673,8 @@ if __name__ == '__main__':
         parser.add_argument("config", help= '<Required> string',type = string)
         args = parser.parse_args()
         config = args["config"]
-      
+        print(config)
+        
     except:
         config = './config/ACCRE_single.config'
         print("No config path specified. Using default config: {}".format(config))

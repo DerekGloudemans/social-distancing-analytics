@@ -672,11 +672,9 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser()
         parser.add_argument("config", help= '<Required> string',type = str)
         args = parser.parse_args()
-        config = args["config"]
-        print(config)
+        config = args.config
         
-    except Exception as e:
-        print(e)
+    except:
         config = './config/ACCRE_single.config'
         print("No config path specified. Using default config: {}".format(config))
         

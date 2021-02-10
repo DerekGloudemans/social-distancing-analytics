@@ -62,7 +62,7 @@ def stream_all(frames, times, camera, updated, i):
     updated.value = True
     try:
         ret_val = True
-        while(ret_val):
+        while(True):
             ret_val = get_cap(stream, frames, times, i)
             updated.value = True
            

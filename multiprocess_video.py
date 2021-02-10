@@ -675,7 +675,7 @@ if __name__ == '__main__':
     ocpts = manager.list()
     dists = manager.list()
     config = './config/LAMBDA_TEST.config'
-    config = './config/ACCRE.config'
+    config = './config/ACCRE_single.config'
     
     
     #FIXME need a better way to do this (should be based on how many cameras initialize)

@@ -675,7 +675,8 @@ if __name__ == '__main__':
         config = args["config"]
         print(config)
         
-    except:
+    except Exception as e:
+        print(e)
         config = './config/ACCRE_single.config'
         print("No config path specified. Using default config: {}".format(config))
         

@@ -366,6 +366,7 @@ class Worker():
     def set_frame(self, frame):
         torch.cuda.empty_cache()
         # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        #frame = cv2.resize(frame,(1920,1080))
         frame = F.to_tensor(frame)
         frame = F.normalize(frame,mean=[0.485, 0.456, 0.406],
                                               std=[0.229, 0.224, 0.225])
@@ -565,9 +566,9 @@ def post_processor(bbox_q, cameras, out_q, frames, times):
             # if cv2.waitKey(1) & 0xFF == ord('q'): break
               
             frames_processed[i] += 1
-            fps = frames_processed[i] / (time.time() - start)
+            refresh =  np.round((time.time() - start)/frames_processed[i],1)
             if frames_processed[i] % 10 == 0:
-                print("{} frame {} processed by GPU {} ({}fps): {} occupants, {}% compliant".format(cam_name,int(frames_processed[i]),worker_id,fps,occupants,100*(1-np.round(errors/(occupants+1e-6),2))))
+                print("{} frame {} processed by GPU {} ({}s refresh time): {} occupants, {}% compliant".format(cam_name,int(frames_processed[i]),worker_id,refresh,occupants,100*(1-np.round(errors/(occupants+1e-6),2))))
     
     return
 ###---------------------------------------------------------------------------

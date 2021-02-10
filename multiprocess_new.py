@@ -428,18 +428,10 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
             #TODO could benefit from a lock, would help ensure frame and time are actually corresponding
             #pretty sure manager objects already have lock control so the smae item isn't accessed from separate processes at once
             #but that could also be a good lock to have
-            try:
-                worker.set_frame(np.asarray(frames[i]))
-            except:
-                worker.mark_avail()
-                continue
-            
-            try:
-                ped_bboxes,veh_bboxes,blur = worker.get_bboxes()
-            except RuntimeError:
-                torch.cuda.empty_cache()
-                continue
-            
+                    
+            worker.set_frame(np.asarray(frames[i]))
+            ped_bboxes,veh_bboxes,blur = worker.get_bboxes()
+
             # denormalize
             im = F.normalize(worker.gpu_frame[0],mean = [-0.485/0.229, -0.456/0.224, -0.406/0.225],
                                        std = [1/0.229, 1/0.224, 1/0.225])

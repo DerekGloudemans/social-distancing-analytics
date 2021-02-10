@@ -374,33 +374,34 @@ class Worker():
         
         
     def get_bboxes(self):
-        confs,classes,bboxes = self.model(self.gpu_frame)
-        
-        # also blur low confidence faces
-        blur_idxs = torch.where(classes == 0)[0].data.cpu()
-        blurs = bboxes[blur_idxs]
-        
-        # keep only high confidence objects
-        obj_idxs = torch.where(confs > self.conf_cutoff)[0]
-        confs = confs[obj_idxs]
-        classes = classes[obj_idxs]
-        bboxes = bboxes[obj_idxs]
-        
-        # 0: 'person'
-        # 1: 'bicycle'
-        # 2: 'car'
-        # 3: 'motorcycle'
-        # 4: 'airplane'
-        # 5: 'bus'
-        # 6: 'train'
-        # 7: 'truck'
-        ped_idxs = torch.cat([torch.where(classes == 0)[0],torch.where(classes == 1)[0]],dim = 0)
-        veh_idxs = torch.cat([torch.where(classes == 5)[0],torch.where(classes == 2)[0],torch.where(classes == 3)[0],torch.where(classes == 7)[0]],dim = 0)
-        
-        out = torch.cat([bboxes,classes.float().unsqueeze(1),confs.unsqueeze(1)],dim = 1)
-        
-        peds = out[ped_idxs].data.cpu()
-        vehs = out[veh_idxs].data.cpu()
+        with torch.no_grad():
+            confs,classes,bboxes = self.model(self.gpu_frame)
+            
+            # also blur low confidence faces
+            blur_idxs = torch.where(classes == 0)[0].data.cpu()
+            blurs = bboxes[blur_idxs]
+            
+            # keep only high confidence objects
+            obj_idxs = torch.where(confs > self.conf_cutoff)[0]
+            confs = confs[obj_idxs]
+            classes = classes[obj_idxs]
+            bboxes = bboxes[obj_idxs]
+            
+            # 0: 'person'
+            # 1: 'bicycle'
+            # 2: 'car'
+            # 3: 'motorcycle'
+            # 4: 'airplane'
+            # 5: 'bus'
+            # 6: 'train'
+            # 7: 'truck'
+            ped_idxs = torch.cat([torch.where(classes == 0)[0],torch.where(classes == 1)[0]],dim = 0)
+            veh_idxs = torch.cat([torch.where(classes == 5)[0],torch.where(classes == 2)[0],torch.where(classes == 3)[0],torch.where(classes == 7)[0]],dim = 0)
+            
+            out = torch.cat([bboxes,classes.float().unsqueeze(1),confs.unsqueeze(1)],dim = 1)
+            
+            peds = out[ped_idxs].data.cpu()
+            vehs = out[veh_idxs].data.cpu()
         
         return peds,vehs,blurs
          
@@ -428,8 +429,14 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
             #TODO could benefit from a lock, would help ensure frame and time are actually corresponding
             #pretty sure manager objects already have lock control so the smae item isn't accessed from separate processes at once
             #but that could also be a good lock to have
-                    
-            worker.set_frame(np.asarray(frames[i]))
+            
+            try:
+                worker.set_frame(np.asarray(frames[i]))
+            except ValueError:
+                worker.mark_avail()
+                torch.cuda.empty_cache()
+                continue
+                
             ped_bboxes,veh_bboxes,blur = worker.get_bboxes()
 
             # denormalize

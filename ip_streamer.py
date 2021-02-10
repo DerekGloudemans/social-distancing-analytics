@@ -61,14 +61,19 @@ def stream_all(frames, times, camera, updated, i):
 
     updated.value = True
     try:
-        while(True):
-            get_cap(stream, frames, times, i)
+        ret_val = True
+        while(ret_val):
+            ret_val = get_cap(stream, frames, times, i)
             updated.value = True
            
         
             # cv2.namedWindow("result" + str(i), cv2.WINDOW_NORMAL)
             # cv2.imshow("result" + str(i), frames[i])
             # if cv2.waitKey(1) & 0xFF == ord('q'): break
+            
+        print("Finished all frames.")
+        close_cap(stream)
+        cv2.destroyAllWindows()
     except:
         print("Unexpected error:", sys.exc_info()[0])
         close_cap(stream)
@@ -87,7 +92,7 @@ def open_cap(ip):
 def get_cap(stream, frames, times, i):
     times[i] = datetime.datetime.now()
     ret_val, frames[i] = stream.read()
-
+    return ret_val
 #closes all video capture objects
 def close_cap(stream):
     stream.release()

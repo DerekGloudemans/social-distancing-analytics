@@ -164,8 +164,22 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
         
         #continuously loop until keyboard interrupt
         
-        while(True):
-            continue
+        for streamer in streamers:
+            streamer.join()
+            
+        print ("All Streamers have finished")
+        
+        for worker in work_processes:
+            worker.kill()
+            worker.join()
+        
+        analysis.kill()
+        analysis.join()
+        
+        post_proc.kill()
+        post_proc.join()
+        
+        
             # with s_lock:
             #     print(sample)
     #         curr_time = time.time()
@@ -353,6 +367,7 @@ class Worker():
         # self.vids = vids
         
         self.conf_cutoff = 0.3
+        self.count = 0
         
         #what gpu this worker is on
         try:
@@ -427,46 +442,51 @@ class Worker():
 def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
         
     worker = Worker(gpu)
-    try:
-        while(True):
-            if worker.avail:
-                worker.mark_unavail()
-                # save current index so it doesn't change while processing
-                #lock ensures that multiple processes aren't working on same frame
-                with i_lock:
-                    i = ind.value
-                    ind.value = ind.value + 1
-                    ind.value = ind.value % len(frames)
-                    #loop through frames, find people, record occupants and infractions 
-                    #TODO not sure the best way to protect smae vid from being accessed simultaneously
-                    camera = cameras[i]
-                #TODO could benefit from a lock, would help ensure frame and time are actually corresponding
-                #pretty sure manager objects already have lock control so the smae item isn't accessed from separate processes at once
-                #but that could also be a good lock to have
+    while(True):
+        if worker.avail:
+            worker.mark_unavail()
+            # save current index so it doesn't change while processing
+            #lock ensures that multiple processes aren't working on same frame
+            with i_lock:
+                i = ind.value
+                ind.value = ind.value + 1
+                ind.value = ind.value % len(frames)
+                #loop through frames, find people, record occupants and infractions 
+                #TODO not sure the best way to protect smae vid from being accessed simultaneously
+                camera = cameras[i]
+            #TODO could benefit from a lock, would help ensure frame and time are actually corresponding
+            #pretty sure manager objects already have lock control so the smae item isn't accessed from separate processes at once
+            #but that could also be a good lock to have
+            try:
                 worker.set_frame(np.asarray(frames[i]))
-                ped_bboxes,veh_bboxes,blur = worker.get_bboxes()
-                
-                # denormalize
-                im = F.normalize(worker.gpu_frame[0],mean = [-0.485/0.229, -0.456/0.224, -0.406/0.225],
-                                           std = [1/0.229, 1/0.224, 1/0.225])
-                im = F.to_pil_image(im.cpu())
-                open_cv_image = np.array(im)
-                im = open_cv_image.copy()/255.0
-                #im = im[:,:,::-1]
-                
-                for ped in blur:
-                    im = utils.find_blur_face(ped.int(),im)
-                
-                #combine so bounding boxes remain associated with camera
-                box_ind = (ped_bboxes,veh_bboxes,i,im)
-                
-                bbox_q.put(box_ind)
-                #bboxes should be sent to a queue, should also have frame or camera number associated
-                
+            except:
                 worker.mark_avail()
+                continue
+            
+            ped_bboxes,veh_bboxes,blur = worker.get_bboxes()
+            
+            # denormalize
+            im = F.normalize(worker.gpu_frame[0],mean = [-0.485/0.229, -0.456/0.224, -0.406/0.225],
+                                       std = [1/0.229, 1/0.224, 1/0.225])
+            im = F.to_pil_image(im.cpu())
+            open_cv_image = np.array(im)
+            im = open_cv_image.copy()/255.0
+            #im = im[:,:,::-1]
+            
+            for ped in blur:
+                im = utils.find_blur_face(ped.int(),im)
+            
+            #combine so bounding boxes remain associated with camera
+            box_ind = (ped_bboxes,veh_bboxes,i,im)
+            
+            bbox_q.put(box_ind)
+            #bboxes should be sent to a queue, should also have frame or camera number associated
+            
+            worker.count += 1
+            
+            worker.mark_avail()
                 
-    except KeyboardInterrupt:
-        print("Unexpected worker error:", sys.exc_info()[0])
+
     return
                
 ###---------------------------------------------------------------------------
@@ -564,7 +584,7 @@ def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
                   
                 frames_processed[i] += 1
                     
-    except KeyboardInterrupt:
+    except:
         print("Unexpected postprocessing error:", sys.exc_info()[0])
         cv2.destroyAllWindows()
     return
@@ -647,7 +667,7 @@ def post_processor(bbox_q, cameras, out_q, frames, times, image_q = None):
 if __name__ == '__main__':
     manager = mp.Manager()
     ctx = mp.get_context('spawn')
-    buf_num = 3
+    buf_num = 6
     global errs
     global ocpts
     global dists
@@ -655,7 +675,7 @@ if __name__ == '__main__':
     ocpts = manager.list()
     dists = manager.list()
     config = './config/LAMBDA_TEST.config'
-    config = './config/ACCRE_baseline1.config'
+    config = './config/ACCRE.config'
     
     
     #FIXME need a better way to do this (should be based on how many cameras initialize)

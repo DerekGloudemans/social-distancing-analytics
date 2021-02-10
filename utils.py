@@ -358,9 +358,10 @@ def unfreeze_all(model, frozen=False):
 ###---------------------------------------------------------------------------
 #   Outputs oocupancy data to a txt file
 
-def video_write_info(f, real_ftpts, dt, count, people, avg_dist, avg_min_dist,cam_name):
+def video_write_info(f, real_ftpts, dt, count, people, avg_dist, avg_min_dist,cam_name,veh_pts):
     pts = real_ftpts.tolist()
-    f.writerow([dt,cam_name, people, count, avg_dist, avg_min_dist, pts])
+    veh_pts = veh_pts.tolist()
+    f.writerow([dt,cam_name, people, count, avg_dist, avg_min_dist, pts,veh_pts])
     
 
 ###---------------------------------------------------------------------------
@@ -479,7 +480,6 @@ def find_min_dist(mytree, real_pts):
         
         #do this for every pt in the tree - see if there is a built in function for this
         all_mins[i] = dist[1]
-        print(all_mins)
     # med_med = med_dists[middle]
     # avg_med = sum(med_dists)/len(med_dists)
     min_dist = min(all_mins)

@@ -137,6 +137,7 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
         prev_time = time.time()
         
         # start GPU worker processes
+        print("{} GPUs available".format(len(GPU_LIST)))
         work_processes = []
         if len(GPU_LIST) > 0:
             for gpu in GPU_LIST:

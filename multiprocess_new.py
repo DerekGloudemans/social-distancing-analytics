@@ -512,9 +512,10 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
             occupants = len(ped_bboxes)
             
             #save frames with occupants
-            if frame_save and occupants > 0:
+            if frame_save and occupants > 0 and worker.count % 10 == 0:
                 result = prep_frame(ped_pts, im, camera, errors, occupants, ped_bboxes,veh_bboxes,classes)
-                frame_name = "{}/{}.jpg".format(camera["frame_dir"],str(dt))
+                dt_fixed = str(dt).replace(":","-").split(".")[0]
+                frame_name = "{}/{}.jpg".format(camera["frame_dir"],dt_fixed)
                 cv2.imwrite(frame_name,result*255)
             
             #combine so bounding boxes remain associated with camera

@@ -23,7 +23,7 @@ def draw_bbox(image, bboxes, classes, show_label=True,redact = True):
     """
     
     colors = np.array([[0.2,1,0.6],
-                      [0.2,1,0.8],
+                      [0.2,1,0],
                       [0.8,0.8,0.8],
                       [0.8,0.8,0.8],
                       [0.8,0.8,0.8],
@@ -41,7 +41,7 @@ def draw_bbox(image, bboxes, classes, show_label=True,redact = True):
         score = bbox[5]
         class_ind = int(bbox[4])
         bbox_color = colors[class_ind]
-        bbox_thick = int(0.2 * (image_h + image_w) / 600)
+        bbox_thick = int(0.3 * (image_h + image_w) / 600)
 
         # redact faces
         if redact:

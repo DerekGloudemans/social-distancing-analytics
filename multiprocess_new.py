@@ -122,14 +122,11 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
         # analysis.start()
         # print('Analysis process started')
         
-        
-            
         errs[0][0] = 4
         #wait until frames are starting to be read
         while(not updated.value):   
             continue
         errs[0][0] = 5
-        
         
         start_time = time.time()
         while (time.time() - start_time) < 60:# try for 1 minute to read first frame from each stream
@@ -142,6 +139,27 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
                 time.sleep(10)
                 if time.time() - start_time > 60:
                     raise Exception("Streams not loading frames correctly")
+        
+        
+        
+        
+        # Create directories for results
+        start_time = time.time()
+        start_time = time.strftime('%Y-%m-%d--%H-%M-%S', time.localtime(start_time))
+        
+        # create overarching results directory
+        f_directory = cameras[0]["output"].split("/")[:-1]
+        f_directory = "/".join(f_directory).format(start_time)
+        os.mkdir(f_directory)
+        
+        # create directory for each camera's output frames
+        for camera in cameras:
+            f_directory = camera["output"].split("/")[:-1]
+            f_directory.append("{}_output_frames")
+            f_directory = "/".join(f_directory).format(start_time,camera["name"])                                                
+            os.mkdir(f_directory)     
+            camera["frame_dir"] = f_directory
+            camera["output"] = camera["output"].format(start_time)
         
         
         # start GPU worker processes
@@ -157,8 +175,8 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
             proc.start()
         print("All worker processes started")
         
-        print('Starting to post-process now.')    
-        post_processor(bbox_q, cameras, out_q, frames, times)
+        print('Starting to post-process now.') 
+        post_processor(bbox_q, cameras)
 
             
   
@@ -423,7 +441,8 @@ class Worker():
 
 # def proc_video(worker, ind, i_lock, frames, times, out_q):
 def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
-        
+    classes = utils.read_class_names("./config/coco.names")
+   
     worker = Worker(gpu)
     while(True):
         if worker.avail:
@@ -459,69 +478,13 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
             im = open_cv_image.copy()/255.0
             #im = im[:,:,::-1]
             
+            # blur all peds regardless of confidence
             for ped in blur:
                 im = utils.find_blur_face(ped.int(),im)
             
-            #combine so bounding boxes remain associated with camera
-            box_ind = (ped_bboxes,veh_bboxes,i,im,worker.id)
             
-            bbox_q.put(box_ind)
-            #bboxes should be sent to a queue, should also have frame or camera number associated
-            
-            worker.count += 1
-            
-            worker.mark_avail()
-                
-
-    return
-               
-###---------------------------------------------------------------------------
-#   input queue of bbox info, output queue of stats
-
-
-#reassociate output boxes with frame or at least video number
-#give it a queueue of bboxes and associated, (frame/video number)
-#willl be a separate process
-#monitor queue size so it doesn't get ridiciulously big
-
-#could move writing to a different process but probably not atm
-def post_processor(bbox_q, cameras, out_q, frames, times):
-    classes = utils.read_class_names("./config/coco.names")
-    start = time.time()
-    start_time = time.time()
-    start_time = time.strftime('%Y-%m-%d--%H-%M-%S', time.localtime(start_time))
-    
-    # create overarching results directory
-    f_directory = cameras[0]["output"].split("/")[:-1]
-    f_directory = "/".join(f_directory).format(start_time)
-    os.mkdir(f_directory)
-    
-    for camera in cameras:
-        f_directory = camera["output"].split("/")[:-1]
-        f_directory.append("{}_output_frames")
-        f_directory = "/".join(f_directory).format(start_time,camera["name"])                                                
-        os.mkdir(f_directory)     
-        camera["frame_dir"] = f_directory
-        
-    frames_processed = np.zeros(len(cameras))
-    
-    while True:
-        
-        if not bbox_q.empty():
-            box_ind = bbox_q.get()
-            ped_bboxes = box_ind[0]
-            veh_bboxes = box_ind[1]
-            i = int(box_ind[2])
-            frame = box_ind[3]
-            worker_id = box_ind[4]
-            
-            # first, try and show frame
-            #frame = frame.transpose(1, 2, 0)
-            # cv2.imshow("test",frame)
-            # cv2.waitKey(0)
-            
-            camera = cameras[i]
-            filename = camera["output"].format(start_time)
+            # parse metrics and write output frame
+            filename = camera["output"]
             cam_name = camera["name"]
             pix_real = camera["im-gps"]
             frame_save = camera["save_frames"]
@@ -548,40 +511,60 @@ def post_processor(bbox_q, cameras, out_q, frames, times):
                 avg_dist = None
             occupants = len(ped_bboxes)
             
+            #save frames with occupants
+            if frame_save and occupants > 0:
+                result = prep_frame(ped_pts, im, camera, errors, occupants, ped_bboxes,veh_bboxes,classes)
+                frame_name = "{}/{}.jpg".format(camera["frame_dir"],str(dt))
+                cv2.imwrite(frame_name,result*255)
+            
+            #combine so bounding boxes remain associated with camera
+            output = [realpts,real_veh_pts,dt,errors,occupants,avg_dist,avg_min_dist,cam_name,i,worker.id]
+            bbox_q.put(output)            
+            
+            
+            worker.count += 1
+            worker.mark_avail()
+                
+
+    return
+               
+###---------------------------------------------------------------------------
+#   input queue of bbox info, output queue of stats
+
+
+#reassociate output boxes with frame or at least video number
+#give it a queueue of bboxes and associated, (frame/video number)
+#willl be a separate process
+#monitor queue size so it doesn't get ridiciulously big
+
+#could move writing to a different process but probably not atm
+def post_processor(bbox_q, cameras):
+    
+    start = time.time()
+    frames_processed = np.zeros(len(cameras))
+    
+    while True:
+        
+        if not bbox_q.empty():
+            [realpts,real_veh_pts,dt,errors,occupants,avg_dist,avg_min_dist,cam_name,i,worker_id] = bbox_q.get()
+            
+            camera = cameras[i]
+            filename = camera["output"]
+                                  
             #output info to csv file  
             with open(filename, 'a', newline='') as base_f:
                 writer = csv.writer(base_f)
                 utils.video_write_info(writer, realpts, str(dt), errors, occupants, avg_dist, avg_min_dist,cam_name,real_veh_pts)
                     
-            stats = [i, errors, occupants, avg_min_dist]
-            
-            #put outpt data into queue so it is accessible by the analyzer
-            # if out_q.full():
-            #     temp = out_q.get()
-            # out_q.put(stats)
-         
-  
-            #save frames with occupants
-            if frame_save and occupants > 0:
-                result = prep_frame(ped_pts, frame, camera, errors, occupants, ped_bboxes,veh_bboxes,classes)
-                frame_name = "{}/{}.jpg".format(camera["frame_dir"],str(int(frames_processed[i])).zfill(6))
-                cv2.imwrite(frame_name,result*255)
-                    
-            # if frame_show:
-            #     if image_q.full():
-            #         image_q.get()
-            #     image_q.put(result)
-                
-            # # FIXME - just for debugging, show frame on screen
-            # show_frame(result, i)  
-            # if cv2.waitKey(1) & 0xFF == ord('q'): break
               
             frames_processed[i] += 1
             refresh =  np.round((time.time() - start)/frames_processed[i],1)
             if frames_processed[i] % 10 == 0:
                 print("{} frame {} processed by GPU {} ({}s refresh time): {} occupants, {}% compliant".format(cam_name,int(frames_processed[i]),worker_id,refresh,occupants,100*(1-np.round(errors/(occupants+1e-6),2))))
-    
-    return
+            if sum(frames_processed) % 100 == 0:
+                print("bbox queue length: {}".format(bbox_q.qsize()))
+                
+                
 ###---------------------------------------------------------------------------
 #   
 # def fill_vid_array(name, pix_real, real_pix, save = False):

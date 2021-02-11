@@ -420,17 +420,18 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
             worker.mark_unavail()
             # save current index so it doesn't change while processing
             #lock ensures that multiple processes aren't working on same frame
-            with i_lock:
-                i = ind.value
-                ind.value = ind.value + 1
-                ind.value = ind.value % len(frames)
-                #loop through frames, find people, record occupants and infractions 
-                #TODO not sure the best way to protect smae vid from being accessed simultaneously
-                camera = cameras[i]
-            #TODO could benefit from a lock, would help ensure frame and time are actually corresponding
-            #pretty sure manager objects already have lock control so the smae item isn't accessed from separate processes at once
-            #but that could also be a good lock to have
+            try:
+                with i_lock:
+                    i = ind.value
+                    ind.value = ind.value + 1
+                    ind.value = ind.value % len(frames)
+            except:
+                worker.mark_avail()
+                continue
             
+            #loop through frames, find people, record occupants and infractions 
+            camera = cameras[i]
+                
             try:
                 worker.set_frame(np.asarray(frames[i]))
             except ValueError:
@@ -663,7 +664,7 @@ if __name__ == '__main__':
         
     manager = mp.Manager()
     ctx = mp.get_context('spawn')
-    buf_num = 6
+    buf_num = 3
     global errs
     global ocpts
     global dists

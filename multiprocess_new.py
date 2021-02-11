@@ -129,12 +129,20 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
         while(not updated.value):   
             continue
         errs[0][0] = 5
-        time.sleep(15)
-
-        #find and assign the frame size of each stream
-        for i, camera in enumerate(cameras):
-            camera["frame_size"] = (frames[i].shape[:2])
-        prev_time = time.time()
+        
+        
+        start_time = time.time()
+        while (time.time() - start_time) < 60:# try for 1 minute to read first frame from each stream
+            try:
+                #find and assign the frame size of each stream
+                for i, camera in enumerate(cameras):
+                    camera["frame_size"] = (frames[i].shape[:2])
+                break
+            except:
+                time.sleep(10)
+                if time.time() - start_time > 60:
+                    raise Exception("Streams not loading frames correctly")
+        
         
         # start GPU worker processes
         print("{} GPUs available".format(len(GPU_LIST)))
@@ -147,7 +155,6 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
         for proc in work_processes:
             proc.daemon = True
             proc.start()
-            time.sleep(10)
         print("All worker processes started")
         
         print('Starting to post-process now.')    
@@ -164,14 +171,17 @@ def main(errs, ocpts, dists, updated, frames, times, avgs, avg_lock, i_lock, ind
             streamer.join()
             
         #analysis.terminate()
+        try:
+            for proc in work_processes:
+                proc.terminate()
+                proc.join()
         
-        for proc in work_processes:
-            proc.terminate()
-            proc.join()
-            
+        except:
+            pass
         #post_proc.terminate()
         #post_proc.join()
-            
+        
+        print("Terminated all processes. The following error caused shutdown: \n")
         raise e
 
 ###---------------------------------------------------------------------------

@@ -513,7 +513,7 @@ def proc_video(ind, i_lock, frames, times, bbox_q, cameras, gpu):
             occupants = len(ped_bboxes)
         
             # once it starts, it will save every frame
-            if occupants > 10 or errors > 4:
+            if occupants > 6 or errors > 3:
                 frame_save = True
             
             #save frames with occupants
